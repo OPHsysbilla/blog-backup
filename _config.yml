@@ -71,6 +71,13 @@ time_format: HH:mm:ss
 per_page: 10
 pagination_dir: page
 
+#表示站内搜索
+search:
+    path: search.xml
+    field: post
+    format: html
+    limit: 10000
+
 # Extensions
 ## Plugins: https://hexo.io/plugins/
 ## Themes: https://hexo.io/themes/

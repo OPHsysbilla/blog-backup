@@ -2,7 +2,7 @@
 title: Android 警醒向条例
 date: 2019-01-23 00:00:00
 tags:
-    - Android
+	- Android
 ---
 依然很简洁的条例，备忘用
 
@@ -121,7 +121,8 @@ tags:
 70. include设置了id，会覆盖掉layout_activity_head布局文件中根layout的id
 71. 全面屏刘海屏的状态栏是很高的，在使用getLocationInWindow时需要特别注意，需要减去的状态栏高度会更高
 72. onCreate期间调用setHasOptionsMenu，则该fragment在其后的onCreateOptionsMenu回调可以接受到设置标题栏的menu
-73. 在selector的xml写法中，vector图标不能用android:color/transparent来表明空图像，比如`<item android:drawable="@android:color/transparent" android:state_checked="false" />`的写法是错误的，直接在selector的xml中设置item为透明会导致高宽都变化为0，并且高宽不会自动更新。应该更改vector的文件的颜色为android:fillColor="#00000000"
+73. 在selector的xml写法中，vector图标不能用`android:color/transparent`来表明空图像，因为颜色是没有高度的（instrictWidth），并且导致后续高宽不会自动更新
+    > 直接在selector的xml中设置item为透明 `<item android:drawable="@android:color/transparent" android:state_checked="false" />` 的写法是错误的，会导致高宽都变化为0，并且高宽不会自动更新。应该更改vector的文件的颜色为android:fillColor="#00000000"
 74. 设置Acticity为全屏会获得和adjustNothing一样的效果，不会顶起布局
 75. viewstub被inflate后会消失，包括它的id，可以使用android:inflatedId="@id/vs_bottom"来规定它被inflate后叫什么，这样可以防止viewStub消失后其他引用它的布局失去了依赖
 76. rxjava中的timer也可以加入自己的scheduler
@@ -195,16 +196,23 @@ PathMeasure.TANGENT_MATRIX_FLAG | PathMeasure.POSITION_MATRIX_FLAG);`
 105. [Android 代码proguard混淆之后的错误log查看方法](https://blog.csdn.net/attheway/article/details/44220729)
    > 项目目录的progurad下有一个mapping.txt文件 这是混淆后的名字和原名字的映射关系。在ADT安装目录的sdk\tools\proguard\bin下有三个工具，其中proguardgui.bat就是用来还原的图形化工具。
    
-106. 6.0后需要动态申请权限，7.0后需要通过FileProvider访问其他的
+106. 6.0后需要动态申请权限，7.0后需要通过FileProvider访问其他的权限。6.0后的动态申请权限，有可能会出现未授权时录音，[Android录音数据前几千个字节为空的问题](https://mp.weixin.qq.com/s/Xe-RbtackyzgLbh8DBqYfQ)。
 107. 多进程在进程被kill掉的时候来不及正常调用onDestroy等流程，此时会通过binder通知其他进程自己死掉了，见[Binder死亡通知机制之linkToDeath](https://www.androiddesignpatterns.com/2013/08/binders-death-recipients.html)
-108. Fragment的可见性：onHiddenChanged()只会在对fragment进行show/hide变换时调用，第一次进入的时候不会调用，在使用beginTransaction().hide(Fragment)会被调用，而且是在onResume之前；
-而在viewpager中的fragment则完全不一样，需要手动调用setUserVisible(boolean)。 
-     > - [注意onHiddenChanged的特殊情况](http://jcodecraeer.com/a/anzhuokaifa/androidkaifa/2017/0422/7863.html)
-     > - [Android Fragment可见性的判断与监听完全实现](https://www.smwenku.com/a/5ba1abcd2b71771a4da995ba/zh-cn/) 
-
-
-
-
+108. Fragment的可见性：onHiddenChanged()只会在对fragment进行show/hide变换时调用，第一次进入的时候不会调用，在使用beginTransaction().hide(Fragment)会被调用，而且是在onResume之前；而在viewpager中的fragment则完全不一样，需要手动调用setUserVisible(boolean)。 
+	> - [注意onHiddenChanged的特殊情况](http://jcodecraeer.com/a/anzhuokaifa/androidkaifa/2017/0422/7863.html)
+	> - [Android Fragment可见性的判断与监听完全实现](https://www.smwenku.com/a/5ba1abcd2b71771a4da995ba/zh-cn/) 
+109. ViewGroup默认情况不会调用onDraw()，它在init中会被设置成WILL_NOT_DRAW，这是从性能考虑，这样一来，onDraw就不会被调用了。如果我们要重要一个ViweGroup的onDraw方法，有两种方法：
+	> - 在构造函数里面，给其设置一个颜色，如#00000000。
+	> - 在构造函数里面，调用setWillNotDraw(false)，去掉其WILL_NOT_DRAW flag 
+110.可以使用`.adjustViewBounds(true)`方法来设置宽度铺满屏幕的ImageView，但是对于[小于17的版本不能正确显示](https://inthecheesefactory.com/blog/correct-imageview-adjustviewbounds-with-adjustable-imageview/en)
+111. fragment重叠的问题：只需要在onSaveInstanceState中置空fragmnet状态即可-》outState.putParcelable("android:support:fragments", null);
+112. `drawable.getConstantState().newDrawable()`使用的是相同`ConstantState`下新建了一个drawable，和`getResources().getDrawable(R.drawable.xxx)`返回的对象一样。所有从本地资源读取图片资源`getResources().getDrawable(R.drawable.xxx)`的drawable都共享`ConstantState`，**对一个drawable做更改会影响其他drawable持有相同`ConstantState`的drawable**，eg. 修改alpha。可以使用`drawable.mutate()`来创建一个不共享的drawable。
+	> [关于Drawable的缓存机制应该了解的知识](xhttps://www.heqiangfly.com/2017/06/15/android-knowledge-point-drawable-cache/)
+113. 很悲伤的是`Rxjava`中`DisposableSubscriber`的`onStart()`是在subscribeOn指定的线程上进行的（通常是子线程），它在整个任务的开始的时候调用。而`onComplete()`、`onNext()`、`onError()`是在observeOn指定的线程上进行的（通常是UI线程）。事实上，如果不指定线程，observe都将在主线程进行
+114. 注意RecycleView里都每个子项设置`focusable`=true的时候，这个时候设置点击就可能被最后一个抢掉了。
+115. 当一个Activity反常销毁重建的时候，请先查看下你的“不保留活动“是不是开启了。
+116. dp和px的关系，是与屏幕像素密度为160的倍数而不同：像素密度为160时1px = 1dp
+117.
 
 ## 更多应该阅读的
 1. CopyOnWriteArrayList
