@@ -1,12 +1,12 @@
 ---
-title: 66个Java面试答案整理
+title: Java面试答案整理
 date: 2020-11-09 19:58:03
 tags:
     - 面试
-    - Java
---- 
 
-[TOC]
+categories: 面试
+
+--- 
 
 ## ThreadLocal是干嘛的，作用是什么 
 
@@ -17,6 +17,7 @@ tags:
 3. 如果workerCount >= corePoolSize，且线程池内的阻塞队列未满，则将任务添加到该阻塞队列中。
 4. 如果workerCount >= corePoolSize && workerCount < maximumPoolSize，且线程池内的阻塞队列已满，则创建并启动一个线程来执行新提交的任务。
 5. 如果workerCount >= maximumPoolSize，并且线程池内的阻塞队列已满, 则根据拒绝策略来处理该任务, 默认的处理方式是直接抛异常。
+<!--more-->
 
 ![图4 任务调度流程](https://p0.meituan.net/travelcube/31bad766983e212431077ca8da92762050214.png)
 

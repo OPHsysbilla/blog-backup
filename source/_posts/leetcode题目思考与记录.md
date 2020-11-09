@@ -4,13 +4,32 @@ date: 2020-02-29 21:34:13
 tags:
     - Algorithm
     - 算法
-
-categories: 算法
+    - 面试
+categories: 面试
 ---
+
+## 约瑟夫环问题
+ [见此](https://blog.csdn.net/lei396601057/article/details/109312337)
+
+## 单调栈
+
+
+1. [42. 接雨水](https://leetcode-cn.com/problems/trapping-rain-water/)
+
+2. [84. 柱状图中最大的矩形](https://leetcode-cn.com/problems/largest-rectangle-in-histogram/)
+
+3. 保卫王国 - 牛客
+
+## 无损压缩算法：deflate、Huffman Coding
+
+
 ##### 寻找两个有序数组的中位数
 要求算法的时间复杂度为 O(log(m + n))
 即找出第(m+n)/2个元素
 设k=(m+n)/2，则需要在两个数组中分别寻找第k/2个元素，原因如下：
+
+<!--more-->
+
 题目中要求的时间复杂度为 O(log(m + n))，很容易想到的方法就是二分，现在有两个数组，要对那个数组进行二分合适？由于找的是中位数，那么这个数字的两边的元素个数是相等的，所以只需要确定一个数组中的两边元素，两一个数组的对应的补上去就可以了，为了提高效率，要选择最短的数组做二分查找 — [原文](https://blog.csdn.net/Shuffle_Ts/article/details/93142735)
 
 

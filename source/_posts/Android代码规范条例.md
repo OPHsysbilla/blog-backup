@@ -3,6 +3,8 @@ title: Android 警醒向条例
 date: 2019-01-23 00:00:00
 tags:
 	- Android
+
+categories: Android
 ---
 依然很简洁的条例，备忘用
 
