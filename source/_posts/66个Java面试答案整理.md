@@ -1,10 +1,31 @@
 ---
-title: 44个Java面试答案整理
-date: 2020-11-09 18:46:55
+title: 66个Java面试答案整理
+date: 2020-11-09 19:58:03
 tags:
+    - 面试
+    - Java
 --- 
 
-@[toc]
+[TOC]
+
+## ThreadLocal是干嘛的，作用是什么 
+
+## 线程池里的参数是什么意思
+以下内容参考[Java线程池实现原理及其在美团业务中的实践](https://tech.meituan.com/2020/04/02/java-pooling-pratice-in-meituan.html)
+1. 首先检测线程池运行状态，如果不是RUNNING，则直接拒绝，线程池要保证在RUNNING的状态下执行任务。
+2. 如果workerCount < corePoolSize，则创建并启动一个线程来执行新提交的任务。
+3. 如果workerCount >= corePoolSize，且线程池内的阻塞队列未满，则将任务添加到该阻塞队列中。
+4. 如果workerCount >= corePoolSize && workerCount < maximumPoolSize，且线程池内的阻塞队列已满，则创建并启动一个线程来执行新提交的任务。
+5. 如果workerCount >= maximumPoolSize，并且线程池内的阻塞队列已满, 则根据拒绝策略来处理该任务, 默认的处理方式是直接抛异常。
+
+![图4 任务调度流程](https://p0.meituan.net/travelcube/31bad766983e212431077ca8da92762050214.png)
+
+## 你可能知道的Java知识？
+1. clone()只拷贝第一层，[只复制第一层](https://blog.csdn.net/zhangjg_blog/article/details/18369201)
+2. 类比[处理器 - 缓存 - 内存]的三级层次，[线程 - 工作内存 - 主内存]。其中线程互相不可见彼此的工作内存，并通过主内存来共享交流。
+3. volatile关键字的作用是：1、防止指令重新排序；2、保证每个线程在拿到它的那一瞬间前被刷新，拿到的是主内存中的最新值。但不能说volatile修饰了变量后就实现了线程安全：例如i++，i++这个操作本身不是原子性的。线程在拿到i时是可以保证是最新值，但是在之后加一再写回去的这两步中，其他线程可能已经修改了主内存里i的值，最终导致最后写回去的值覆盖了其他线程的操作。
+4. Java中锁的分类有自旋锁、可重入锁、阻塞锁等等分类，其中能够造成线程卡死的锁，只有阻塞锁。
+5. 写时复制的ConcurrentHashMap的[clear方法是弱一致性的](http://ifeve.com/concurrenthashmap-weakly-consistent/)，因为是不同桶结点在清理时临时加锁，所以已经被清理过的段可能会被添加新内容很正常。故现象为clear完后，里面有其他地方新加的数据。原理[HashMap? ConcurrentHashMap? 相信看完这篇没人能难住你！](https://crossoverjie.top/2018/07/23/java-senior/ConcurrentHashMap/)和[Java 8 ConcurrentHashMap 源码解读](https://swenfang.github.io/2018/06/03/Java%208%20ConcurrentHashMap%20%E6%BA%90%E7%A0%81%E8%A7%A3%E8%AF%BB/)
 
 ## 1.接口与抽象类区别？
 ## 2. java中的异常有哪⼏几类，分别怎么使用？

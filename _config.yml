@@ -89,3 +89,5 @@ deploy:
   type: git
   repository: https://github.com/OPHsysbilla/ophsysbilla.github.io.git
   branch: master
+
+scheme: Mist
