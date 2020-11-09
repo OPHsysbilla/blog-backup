@@ -1,12 +1,12 @@
 ---
-title: Java面试答案整理
-date: 2020-11-09 19:58:03
-tags:
-    - 面试
-
+title: 惹Java面试答案整理
+date: 2020-11-09 20:50:10
 categories: 面试
+tags: 
+    - Java
+    - 面试
+---
 
---- 
 
 ## ThreadLocal是干嘛的，作用是什么 
 

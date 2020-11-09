@@ -90,4 +90,4 @@ deploy:
   repository: https://github.com/OPHsysbilla/ophsysbilla.github.io.git
   branch: master
 
-scheme: Gemini
+scheme: Mist
