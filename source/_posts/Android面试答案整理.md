@@ -6,11 +6,9 @@ tags:
 categories: 面试
 ---
 
-OKHTTP(Socket 连接池、Http缓存、责任链)、Retrofit(动态代理)
+## Retrofit(动态代理)
 
-[Okhttp3 总结研究 （面试）](https://blog.csdn.net/u012881042/article/details/79759203?utm_medium=distribute.pc_relevant.none-task-blog-BlogCommendFromMachineLearnPai2-2.channel_param&depth_1-utm_source=distribute.pc_relevant.none-task-blog-BlogCommendFromMachineLearnPai2-2.channel_param)
-
-说说组件化和插件化，热更新技术原理
+## 说说组件化和插件化，热更新技术原理
 
 ## 知识图谱
 
@@ -31,13 +29,76 @@ OKHTTP(Socket 连接池、Http缓存、责任链)、Retrofit(动态代理)
 
 2. 一文超翔实的源码：[Android Bander设计与实现 - 设计篇](https://blog.csdn.net/universus/article/details/6211589)
 
-### 
+## Android ANR的产生原因，如何定位ANR
 
 
+## OKHTTP(Socket 连接池、Http缓存、责任链)
 
-Android ANR的产生原因，如何定位ANR
 
+### OKHTTP Socket连接池
+```JAVA
+  private static final Executor executor = new ThreadPoolExecutor(0 /* corePoolSize */,
+      Integer.MAX_VALUE /* maximumPoolSize */, 60L /* keepAliveTime */, TimeUnit.SECONDS,
+      new SynchronousQueue<Runnable>(), Util.threadFactory("OkHttp ConnectionPool", true));
+```
+#### socket复用有何标准
+复用socket连接意味着跳过了https握手，所以要验证证书
+1. http1.x协议下当前socket没有其他流正在读写时可以复用
+2. http2.0对流数量没有限制
+okhttp只在2.0的时候会复用，okhttp记录了每个socket流使用情况，同时设定了每个socket能同时使用多少流
 
+> 一个socket如果被复用，只有http2.0允许同一个socket在同一个时候写入多个流数据。
+
+> - http1.x
+> 在http 1.x协议下，所有的请求的都是顺序的，即使使用了管道技术（可以同时按顺序连续发送请求，但消息的返回还是按照请求发送的顺序返回）也是如此，因此一个socket在任何时刻只能有一个流在写入，这意味着正在写入数据的socket无法被另一个请求复用
+
+> - http2.0
+> http2.0协议使用了多路复用技术，允许同一个socket在同一个时候写入多个流数据，每个流有id，会进行组装，因此，这个时候正在写入数据的socket是可以被复用的。
+
+#### 一个socket何时会被关闭？socket池何时被清理
+[okhttp通过一个单独的线程来清理socket池](https://juejin.im/entry/6844903750000181256)。每次put一个新连接的时候都会判断当前是否有在清理socket池。
+这个线程`while(true) `循环找出空闲时间最长的sockect连接：
+> 规定时间t = sockect默认设定的生存时间
+1. 如果哪个空闲连接超过了规定时间t，关掉这个socket，立刻返回继续找下一个
+2. 如果每个空闲连接都没有超过规定时间t的，就返回空闲时间最长的sockect连接，得到`diff = 规定时间 - 空闲时间`，开始`wait(diff)`，`wait()`完后继续下一次清理
+3. 如果没有空闲连接， 最少`wait()`等待一个规定时间t
+4. 没有任何连接，返回-1退出`while(true)`，等待下次put个新连接的时候的时候重新开启清理socket池的线程
+> 只要连接池中有连接，基本清理线程就一直存在，直到所有连接被释放该线程才会停止
+
+[Okhttp3 总结研究 （面试）](https://blog.csdn.net/u012881042/article/details/79759203?utm_medium=distribute.pc_relevant.none-task-blog-BlogCommendFromMachineLearnPai2-2.channel_param&depth_1-utm_source=distribute.pc_relevant.none-task-blog-BlogCommendFromMachineLearnPai2-2.channel_param)
+
+### okhttp责任链
+递归调用拦截器
+
+#### 应用拦截器interceptors和网络拦截器networkInterceptors的区别在哪
+```JAVA
+	Response getResponseWithInterceptorChain() throws IOException {
+		// Build a full stack of interceptors.interceptors
+		List<Interceptor> interceptors = new ArrayList<>();
+		interceptors.addAll(client.interceptors());//应用拦截器
+		//重定向、重试
+		interceptors.add(retryAndFollowUpInterceptor);
+		//用户应用层和网络从桥梁。主要包含：
+		//1. 将用户的request，转变为网络层的request，比如添加各种请求头，UA ,Cookie , Content-Type等。
+		//2. 将网络层的response转变为用户层的response，比如解压缩，除去各种请求头等。
+		interceptors.add(new BridgeInterceptor(client.cookieJar()));
+		//缓存
+		interceptors.add(new CacheInterceptor(client.internalCache()));
+		//负责与服务器之间建立连接。
+		interceptors.add(new ConnectInterceptor(client));
+		if (!forWebSocket) {
+		  interceptors.addAll(client.networkInterceptors());//网络拦截器
+		}
+		//负责请求服务器
+		interceptors.add(new CallServerInterceptor(forWebSocket));
+		
+		//第一个chain
+		Interceptor.Chain chain = new RealInterceptorChain(
+		    interceptors, null, null, null, 0, originalRequest);
+		//通过链式请求的得到response
+		return chain.proceed(originalRequest);
+    }
+```
 
 ## 点击桌面图标进入我们软件应用时发生了什么？
 
