@@ -32,7 +32,31 @@ categories: 面试
 ## Android ANR的产生原因，如何定位ANR
 
 
+
+## Handler 40问
+摘自[面试常客「Handler」的 40+ 个高频问题 Q & A 对答！](https://mp.weixin.qq.com/s?__biz=MzIxNjc0ODExMA==&mid=2247486960&idx=1&sn=9c325c52004c94f5e1a6ca80b6907962&chksm=978514d1a0f29dc77309045867f9243ed1dac77c8e3055a450553a8b84c8978cf6a4dd564939&scene=132#wechat_redirect)
+
 ## OkHttp相关
+### 断点续传
+1. 客户端请求 `Range: bytes=200-1000` 见[Range](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Headers/Range)
+2. 服务器返回 `206 Partial Content` 标示Content-Range: bytes 200-1000/67589 
+3. 同时服务器响应的header中有`Accept-Ranges: bytes`
+4. 使用RandomAccessFile允许自由定义文件记录指针，在同一个文件的不同位置进行**并发读写**
+5. 客户端头的 `If-Range` 需要和 `Range` 配合起来使用，否则会被服务端忽略
+![](https://cdn.ancii.com/article/image/v1/Qj/zb/RO/ORzjbQVFJasX5aR2DaTg2_Zx5KSH75KdTtVIpx5BAibeJW3s2CVwUVt3uFqg5I-4TSjNCnhoAJhLsjcM99fslnxQJbDmwU5z8sIvZN3h5MQ.jpg)
+
+> 以下摘自 [图解：HTTP 范围请求，助力断点续传、多线程下载的核心原理](https://juejin.im/post/6844903642034765837)：
+> 1. 范围请求需要 HTTP/1.1 及之上支持
+> 3. 客户端通过在请求头中添加 `Range` 这个请求头，来指定请求的内容实体的字节范围。
+> 4. 服务端通过 `Content-Range` 来标识当前返回的内容实体范围，并使用 `Content-Length` 来标识当前返回的本次压缩后要读多少字节。
+> 5. 客户端可以通过 `If-Range` 来区分资源文件是否变动，它的值来自 `ETag` 或者 `Last-Modifled`。如果资源文件有改动，服务器会返回code 200重新走下载流程。
+
+#### 为什么多线程下载可以提速
+见这篇文章：[撸了个多线程断点续传下载器，我从中学习到了这些知识](https://zhuanlan.zhihu.com/p/165048187)
+个人理解，当发生了丢包，检测到拥塞时，TCP慢启动会减半线性增长发送窗口。而多线程一起下载，其他线程可能正在正常下载，只影响发生丢包的线程
+
+![拥塞窗口](https://pic3.zhimg.com/80/v2-d6c924f27796e5cc5aad061a70399812_1440w.jpg)
+
 ### 请求队列的使用的线程池
 Dispatcher类里有**两个异步队列，一个同步队列**，`readyAsyncCalls`是没排上队的请求。
 > 没排上队是因为在进队时，目前正在执行的请求大于64或者同Host的请求大于5了，参考线程池的思想。
