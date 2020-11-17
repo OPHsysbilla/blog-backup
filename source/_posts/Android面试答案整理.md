@@ -30,7 +30,7 @@ categories: 面试
 2. 一文超翔实的源码：[Android Bander设计与实现 - 设计篇](https://blog.csdn.net/universus/article/details/6211589)
 
 ## Android ANR的产生原因，如何定位ANR
-
+[彻底理解安卓应用无响应机制](http://gityuan.com/2019/04/06/android-anr/)
 
 
 ## Handler 40问

@@ -3,10 +3,19 @@ title: Handler面试40问答案整理
 date: 2020-11-16 14:21:02
 tags:
 	- Android
-
-categories: Android
+    - 面试
+categories: 面试
 ---
 
+# Handler MessageQueue 无消息时，为什么不出现 ANR
+ANR需要先埋下炸弹，限时时间里解除才不会导致炸弹炸毁
+Handler在无消息的时候是挂起的，直到下个消息来nativeWake()才接着做
+1. `MessageQueue` 无消息时，会进入 `nativePollOnce()`休眠，此时无消息，处于休眠状态；
+2. `MessageQueue` 有消息时，会立即通过 `nativeWake()` 唤醒去处理消息；
+
+# 如果 Java 层 MessageQueue 中消息很少，但是响应时间却很长，是什么原因？
+1. `MessageQueue` 队列中，该 `Message` 前的 `Message` 处理较为耗时；
+2. `Native` 层消息过多，`Java` 层 `MessageQueue` 消息优先级最低，最后处理；
 
 # Handler 分发事件优先级，是否都可拦截？拦截的优先级如何？
 可以统一拦截消息，**但无法拦截通过Runnable通过`getPostMessage(Runnable r)`生成的`Message`**。
@@ -130,12 +139,245 @@ Handler的`dispatchMessage`函数里：
 > `BlockCanary`就是用此设计
 
 # 子线程如何向主线程的 Handler 发送消息？为什么经过 Handler 就可以达到切线程的目的？
-> 主线程与工作线程之间，是共享内存地址空间的，所以是可以互相操作的，但是需要注意处理线程同步的问题。
-工作线程通过主线的 Handler，向其成员变量 MessageQueue 中添加 Message
+向`Handler`的成员变量 `MessageQueue` 中添加消息 `Message`，下次`Looper#loop()`循环到的时候就可以检测到这个消息`Message`
 
+
+> 主线程与工作线程之间，是共享内存地址空间的，所以是可以互相操作的，但是需要注意处理线程同步的问题。
+- 工作线程通过主线的 `Handler`，就可以向其成员变量 MessageQueue 中添加 Message
+- 主线程的`WorkHandler`只要拿到工作线程`HandlerThread`的`Looper`就可以通过向`WorkHandler`的发消息了
+
+```JAVA
+ protected void onCreate(Bundle savedInstanceState) {
+     // ...
+    mHandlerThread = new HandlerThread("HandlerThread/Demo");
+    mHandlerThread.start();
+    mHandler = new WorkHandler(mHandlerThread.getLooper());
+    Message msg = mHandler.obtainMessage();
+    msg.obj = Thread.currentThread().getName();
+    mHandler.sendMessage(msg);
+ }
+```
 # Handler 的 IdleHandler 机制，如何理解？有什么用途
 `IdleHandler` 是 `Handler` 提供的一种在消息队列空闲时，执行任务的时机 
 - 执行时机是不可控的，不适合执行一些对时机要求比较高的任务。
 - > 执行的时机依赖消息队列的情况，那么如果 `MessageQueue` 一直有待执行的消息时，`IdleHandler` 就一直得不到执行
 
 在 `Looper` 事件循环的过程中，当出现空闲的时候，允许我们执行任务的一种机制
+> 出现空闲指本次`Looper`在取`MessageQueue#next()`下一条消息为空或下一条消息还没到执行时间时
+```JAVA
+// MessageQueue.java
+    // If first time idle, then get the number of idlers to run.
+    // Idle handles only run if the queue is empty or if the first message
+    // in the queue (possibly a barrier) is due to be handled in the future.
+    if (pendingIdleHandlerCount < 0
+            && (mMessages == null || now < mMessages.when)) {
+        pendingIdleHandlerCount = mIdleHandlers.size();
+    }
+```
+`IdleHandler`的`queueIdle()` 返回值分：持续回调（true） & 一次性回调（false），false 会导致执行完后，从 mIdleHandlers 中移除
+```JAVA
+ try {
+        keep = idler.queueIdle();
+    } catch (Throwable t) {
+        Log.wtf(TAG, "IdleHandler threw exception", t);
+    }
+
+    if (!keep) {
+        synchronized (this) {
+            mIdleHandlers.remove(idler);
+        }
+    }
+```
+
+## IdleHandler 的 queueIdle() 返回 true，为什么不会死循环？
+本地变量`pendingIdleHandlerCount` 初始化为-1，如果有机会执行的话会置为0，所以每次`MessageQueue#next()`时只经过一次，本次取消息循环里不会再重复执行。下次`Looper`再取`MessageQueue#next()`时才会执行。
+```JAVA
+// MessageQueue.java
+    Message next() {
+        int pendingIdleHandlerCount = -1; // -1 only during first iteration
+        for (;;) {
+                // 在这里没有找到任何消息返回到此处
+                if (pendingIdleHandlerCount < 0
+                        && (mMessages == null || now < mMessages.when)) {
+                    pendingIdleHandlerCount = mIdleHandlers.size();
+                }
+                // ...
+            }
+
+            // Run the idle handlers.
+            // We only ever reach this code block during the first iteration.
+            for (int i = 0; i < pendingIdleHandlerCount; i++) {
+                final IdleHandler idler = mPendingIdleHandlers[i];
+                mPendingIdleHandlers[i] = null; // release the reference to the handler
+
+                boolean keep = false;
+                try {
+                    keep = idler.queueIdle();
+                } catch (Throwable t) {
+                    Log.wtf(TAG, "IdleHandler threw exception", t);
+                }
+
+                if (!keep) {
+                    synchronized (this) {
+                        mIdleHandlers.remove(idler);
+                    }
+                }
+            }
+
+            // Reset the idle handler count to 0 so we do not run them again.
+            pendingIdleHandlerCount = 0;
+
+            // While calling an idle handler, a new message could have been delivered
+            // so go back and look again for a pending message without waiting.
+            // 执行完IdleHandler后，重新分发最近的消息，因为IdleHandler是耗时的，过程中可能有新消息来
+            nextPollTimeoutMillis = 0;
+        }
+    }
+
+```
+
+# IdleHandler 执行耗时会影响正常的消息分发吗？
+会，`IdleHandler`耗时不可控，执行时机也不可控，执行完后会重置 nextPollTimeoutMillis = 0，重新分发最近消息，因为IdleHandler是耗时的，过程中可能有新消息来
+
+# Handler 在 Activity 中使用，什么场景下会出现内存泄露？原因是什么？如何规避？
+主线程生命周期长于四大组件，`msg.target` 指向 `Handler，而` `Handler` 作为内部类持有外部类 `Activity` 的引用，导致 `Activity` 泄露
+1, 静态内部类 `Handler` + `Activity` 弱引用；
+2. 随 `Activity` 生命周期，onDestory() 会 remove 掉所有的消息(类似`Handler#removeCallbacksAndMessages()`)；
+
+
+# Handler在removeMessages时为什么两次循环
+> 因为多个handler对应同一个MessageQueue对应同一个Looper，所以一个`mMessages`里有多个Handler发的消息。
+> 从链表头开始删除所有 `Handler` h 发的对应消息时，中间可能会遇到条件不符合的其他Handler发送的消息，这时需要再开启一个循环从这个不符合条件的n的下一个消息nn开始搜。
+
+其实问题就在于如何删除列表头？第二个循环已经足够删除所有不连续的 `Handler` h 发的对应消息，但无法删除链表头，因为是从链表头开始的。所有第一个循环就是干这个事的，从链表头开始删除连续的符合条件的消息
+```JAVA
+// MessageQueue.java
+    void removeMessages(Handler h, int what, Object object) {
+        if (h == null) {
+            return;
+        }
+
+        synchronized (this) {
+            Message p = mMessages;
+
+            // Remove all messages at front.
+            // 条件A：是这个Handler h 发的且what 和object对应的消息
+            // 从mMessages链表头开始找是不是有符合条件A的消息，并摘除
+            while (p != null && p.target == h && p.what == what
+                   && (object == null || p.obj == object)) {
+                Message n = p.next;
+                mMessages = n; // 摘除p
+                p.recycleUnchecked();
+                p = n;
+            }
+            // 此处遍历完mMessages或者遇到第一个不符合条件A的消息
+
+            // Remove all messages after front.
+            while (p != null) {
+                // 从这个不符合条件A的消息的下一个开始找
+                Message n = p.next;
+                if (n != null) {
+                    // 找到符合条件A的消息
+                    if (n.target == h && n.what == what
+                        && (object == null || n.obj == object)) {
+                            
+                        Message nn = n.next;
+                        n.recycleUnchecked();
+                        p.next = nn; // 删掉n
+                        continue; // 遍历n的下一个nn
+                    }
+                }
+                // 没有符合A的，不删除n，直接跳过n往后遍历
+                p = n;
+            }
+        }
+    }
+```
+# 如何理解 HandlerThread？
+继承 `Thread`，根据`TLS`维护子线程的 `Looper`，在子线程`Looper#loop()`
+将 Thread、Handler、Looper 封装，便于开发者使用
+
+# 如何实现子线程等待主线程处理消息结束后，再继续执行？原理是什么？
+使用 `Handler` 的 `boolean runWithScissors(final Runnable r, long timeout)`
+实现 A 线程阻塞等待 B 线程处理完消息后再继续执行的功能。
+## 原理
+很危险可能造成死锁，是`@hide`不允许非系统调用
+- 如果timeout超时了，不阻塞调用线程了直接`return false`，但是没有取消`runnable`的逻辑消息还是会排队排到执行。
+- 调用线程进入阻塞(`wait()`)，不排队排到执行完成不会被唤醒，如果当前runnable里的代码持有别的锁，会造成死锁，本调用线程永远不执行了
+
+
+
+```JAVA
+// Handler
+    public final boolean runWithScissors(@NonNull Runnable r, long timeout) {
+        // ...
+        // 如果同一个线程直接运行
+        if (Looper.myLooper() == mLooper) {
+            r.run();
+            return true;
+        }
+
+        BlockingRunnable br = new BlockingRunnable(r);
+        return br.postAndWait(this, timeout);
+    }
+
+    private static final class BlockingRunnable implements Runnable {
+        private final Runnable mTask;
+        private boolean mDone;
+
+        public BlockingRunnable(Runnable task) {
+            mTask = task;
+        }
+
+        @Override
+        public void run() {
+            try {
+                // MessageQueue排到的时候执行
+                mTask.run();
+            } finally {
+                synchronized (this) {
+                    mDone = true;
+                    notifyAll(); // 唤醒阻塞
+                }
+            }
+        }
+
+        public boolean postAndWait(Handler handler, long timeout) {
+            // 入队到handler的线程
+            if (!handler.post(this)) {
+                return false;
+            }
+
+            // 软件实现只要没完成mDone一直while阻塞在这里
+            synchronized (this) {
+                if (timeout > 0) {
+                    // 如果延时
+                    final long expirationTime = SystemClock.uptimeMillis() + timeout;
+                    while (!mDone) {
+                        long delay = expirationTime - SystemClock.uptimeMillis();
+                        if (delay <= 0) {
+                            // 当超时退出时，这个 Runnable 依然还在目标线程的 MessageQueue 中，没有被移除掉，它最终还是会被 Handler 线程调度并执行。显然并不符合业务预期
+                            return false; // timeout
+                        }
+                        try {
+                            wait(delay);
+                        } catch (InterruptedException ex) {
+                        }
+                    }
+                } else {
+                    while (!mDone) {
+                        try {
+                            wait();
+                        } catch (InterruptedException ex) {
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+    }
+```
+## 为什么被标记为 hide？存在什么问题？原因是什么？
+在子线程 Looper 中使用，可能导致 A 线程进入 wait 等待，而永远得不到被 notify 唤醒
+- 原因： 子线程 `Looper` 允许退出，若包装的 `BlockingRunnable` 被执行前，`MessageQueue` 退出，则该 `runnable` 永远不会被执行，则会导致 A 线程一直处于 `wait` 等待，永远不会被 `notify` 唤醒
+- 解决方法：要求该`Handler`的`Looper`使用`quitSafely() `不能使用`quit()`。`quit()`会清理掉所有未执行的任务。 `quitSafely()` 只会清理掉当前时间点之后(when > now)的消息。这样`runWithScissors()`发送的任务，依然会被执行。
