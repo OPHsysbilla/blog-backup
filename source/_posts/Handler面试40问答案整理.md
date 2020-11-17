@@ -2,6 +2,7 @@
 title: Handler面试40问答案整理
 date: 2020-11-16 14:21:02
 tags:
+    - Handler
 	- Android
     - 面试
 categories: 面试
@@ -12,6 +13,7 @@ ANR需要先埋下炸弹，限时时间里解除才不会导致炸弹炸毁
 Handler在无消息的时候是挂起的，直到下个消息来nativeWake()才接着做
 1. `MessageQueue` 无消息时，会进入 `nativePollOnce()`休眠，此时无消息，处于休眠状态；
 2. `MessageQueue` 有消息时，会立即通过 `nativeWake()` 唤醒去处理消息；
+<!--more-->
 
 # 如果 Java 层 MessageQueue 中消息很少，但是响应时间却很长，是什么原因？
 1. `MessageQueue` 队列中，该 `Message` 前的 `Message` 处理较为耗时；
