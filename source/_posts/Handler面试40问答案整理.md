@@ -2,7 +2,6 @@
 title: Handler面试40问答案整理
 date: 2020-11-16 14:21:02
 tags:
-    - Handler
 	- Android
     - 面试
 categories: 面试
