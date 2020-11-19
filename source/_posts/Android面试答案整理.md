@@ -10,6 +10,9 @@ categories: 面试
 
 ## 说说组件化和插件化，热更新技术原理
 
+## apk资源加载以及activitythread相关的知识，或者inputevent机制
+
+## Android 系统启动流程吗？
 ## 知识图谱
 
 1. [Android初级、中级、高级、资深工程师(架构师、专家)技能图谱](https://www.jianshu.com/p/659381fcd4e5)
@@ -20,9 +23,70 @@ categories: 面试
 
 ## Binder怎么学
 
-1. [为什么Binder的通信只进行了一次拷贝](https://mubu.com/doc/explore/21079)
+1. [为什么Binder的通信只进行了一次拷贝](https://mubu.com/doc/explore/21079) ：
+	1. 基于 `mmap` 。`Client`与 `Server` 处于不同进程有着不同的虚拟地址规则，所以无法直接通信。一个页框可以映射给多个页，那么就可以将一块物理内存分别与 Client 和 Server 的虚拟内存块进行映射。映射的虚拟内存块大小将近 1M (1M-8K)，所以 IPC 通信传输的数据量也被限制为此值
+		> —— 摘自[谈谈你对 binder 的理解？](https://zhuanlan.zhihu.com/p/143324649)
+	2. 通过 `copy_from_user` 将数据从用户空间拷贝到内核空间，通过 `copy_to_user` 将数据从内核空间拷贝到用户空间。一般的 IPC 方式需要分别调用这两个函数，数据就拷贝了两次，而 binder 将内核空间与目标用户空间进行了 `mmap`，只需调 `copy_from_user` 拷贝一次即可。
+		
 2. [聊聊怎样学习Binder](https://cloud.tencent.com/developer/article/1698142)内有c++代码简单传输的过程
 
+
+### 为什么 binder 驱动要运行在内核空间？可以移到用户空间吗？
+> [说说你对 binder 驱动的了解？](https://zhuanlan.zhihu.com/p/152237289)
+
+binder 驱动运行在内核空间，向上层提供 /dev/binder 设备节点及 open、mmap、ioctl 等系统调用。
+| 结构体 | 说明 | 
+|--|--| 
+| binder_proc | 描述使用 binder 的进程，当调用 binder_open 函数时会创建 | 
+| binder_thread | 描述使用 binder 的线程，当调用 binder_ioctl 函数时会创建 | 
+| binder_node | 描述 binder 实体节点，对应于一个 server ，即用户态的 BpBinder 对象 | 
+| binder_ref | 描述对 binder 实体节点的引用，关联到一个 binder_node | 
+| binder_buffer | 描述 binder 通信过程中存储数据的Buffer | 
+| binder_work | 描述一个 binder 任务 | 
+| binder_transaction | 描述一次 binder 任务相关的数据信息 | 
+| binder_ref_death | 描述 binder_node 即 binder server 的死亡信息 |
+——————————————————
+### oneway 是什么？如何异步等待？
+> [看你简历上写熟悉 AIDL，说一说 oneway 吧](https://zhuanlan.zhihu.com/p/143082762)
+
+oneway 修饰的 AIDL 接口方法，是单向调用，不需要等待另一个进程的返回结果，所以方法的返回类型也只允许是 void。
+即应用进程只向 binder 驱动发送一次数据就结束返回，不再等待回复数据。binder 驱动会将这个请求串行排列在队列里一个个执行。
+
+1. 同步调用
+![同步调用](https://pic3.zhimg.com/80/v2-7b2c17503a7abea3e2cb6befaa7f603a_1440w.jpg)
+
+2. oneway的发送
+![oneway的发送](https://pic2.zhimg.com/80/v2-899eafe99d5c70e5cffe9edde3a9cc7d_1440w.jpg)
+	> 由外部发送给 binder 驱动的都是 BC_ 开头，由 binder 驱动发往外部的都是 BR_开头。
+
+###  Intent 传值为啥会有大小限制？那跨进程传递大图怎么办？
+应用进程在启动 `Binder` 机制时会映射一块 1M 大小的内存，一个进程内所有正在进行的 `Binder` 事务共享这 1M 的缓冲区 。当使用 Intent 进行 IPC 时申请的缓存超过 1M ，其他事务占用的内存时，就会申请失败抛 `TransactionTooLargeException` 异常了。
+1. 解决方法：通过 `putBinder` 的方式传 `Bitmap` 就不会抛异常.
+2. 原因： `Intent` 启动组件时，系统禁掉了文件描述符 fd 机制 (`mAllowFds = false`), bitmap 无法利用共享内存，只能拷贝到 `Binder` 映射的缓冲区，导致缓冲区超限, 触发异常
+3. 通过 putBinder 的方式，避免了 Intent 禁用描述符的影响，bitmap 写 parcel 时的 allowFds 默认是 true , 可以利用共享内存，所以能高效传输图片。
+```JAVA
+Bundle b = new Bundle();
+b.putBinder(“binder”, new IRemoteCaller.Stub() {    
+	@Override    
+	public Bitmap getBitmap() {           
+		return mBitmap;    
+	}
+});
+
+// or
+
+b.putBinder("bitmap", new ImageBinder(mBitmap));
+```
+底部是`ashmem`传递的。
+> bundle 在IPC传递过程中是值的深拷贝，而在Fragment的setArgument之类的地方是引用传递
+> Bitmap，本身就已经实现了 Parcelable 是可以支持序列化
+
+### Intent传输限制怎么办？
+1. 减少传输数据量
+2. 非 ipc 通过内存共享，使用静态变量或者使用EventBus等类似的通信工具
+3. 是 ipc 可以用 file 或者 socket 文件共享（比如通过MemoryFile开辟一片共享内存，然后传递FileDescriptor，接收端用这个fd读）
+4. 匿名内存：flying-pigeon 是一个IPC 跨进程通信组件，底层是匿名内存+Binder ， 突破1MB大小限制，无需写AIDL文件，让实现跨进程通信就像写一个接口一样简单
+5. 持久化
 ### 理解AIDL中的in，out，inout吗
 
 1. 一文看得懂的源码：[聊聊怎样学习Binder](https://cloud.tencent.com/developer/article/1698142)
@@ -30,8 +94,16 @@ categories: 面试
 2. 一文超翔实的源码：[Android Bander设计与实现 - 设计篇](https://blog.csdn.net/universus/article/details/6211589)
 
 ## Android ANR的产生原因，如何定位ANR
-[彻底理解安卓应用无响应机制](http://gityuan.com/2019/04/06/android-anr/)
+> [彻底理解安卓应用无响应机制](http://gityuan.com/2019/04/06/android-anr/)
 
+
+## onCreate 方法里写死循环会 ANR 吗
+ANR 的四种场景：
+1. Service TimeOut: service 未在规定时间执行完成： 前台服务 20s，后台 200s
+2. BroadCastQueue TimeOut: 未在规定时间内未处理完广播：前台广播 10s 内, 后台 60s 内
+3. ContentProvider TimeOut: publish 在 10s 内没有完成
+4. Input Dispatching timeout: 5s 内未响应键盘输入、触摸屏幕等事件
+Activity 的生命周期回调的阻塞并不在触发 ANR 的场景里面，所以并不会直接触发 ANR。只不过死循环阻塞了主线程，如果系统再有上述的四种事件发生，就无法在相应的时间内处理从而触发 ANR
 
 ## Handler 40问
 摘自[面试常客「Handler」的 40+ 个高频问题 Q & A 对答！](https://mp.weixin.qq.com/s?__biz=MzIxNjc0ODExMA==&mid=2247486960&idx=1&sn=9c325c52004c94f5e1a6ca80b6907962&chksm=978514d1a0f29dc77309045867f9243ed1dac77c8e3055a450553a8b84c8978cf6a4dd564939&scene=132#wechat_redirect)
@@ -197,7 +269,28 @@ arrayPool.trimMemory(level);
 ```
 
 
-### [两个Activity切换生命周期是怎样的？](https://blog.csdn.net/lei396601057/article/details/109272301)
+### 两个Activity切换生命周期是怎样的？
+ [两个Activity切换生命周期是怎样的？](https://blog.csdn.net/lei396601057/article/details/109272301)
+假设 从 A Activity 跳转到 B Activity
+- lanchMode不同：
+1. B Activity 的 `launchMode` 为 `standard` ｜｜ B Activity 没有可复用的实例时：A.onPause -> B.onCrete -> B.onStart -> B.onResume -> A.onStop
+2.  B Activity 的 `launchMode` 为 `singleTop` && B Activity 已经在栈顶时：（一些特殊情况如通知栏点击、连点）此时只有 B 页面自己有生命周期变化: B.onPause -> B.onNewIntent -> B.onResume
+3. 当 B Activity 的 `launchMode` 为 `singleInstance` \ `singleTask` && 对应的 B Activity 有可复用的实例时: A.onPause -> B.onNewIntent -> B.onRestart -> B.onStart -> B.onResume -> A.onStop -> ( 如果 A 被移出栈的话还有一个 A.onDestory)
 
+> 摘自[5 道刁钻的 Activity 生命周期面试题](https://zhuanlan.zhihu.com/p/150787285)
+- 生命周期回调都是 AMS 通过 Binder 通知应用进程调用的；而弹出 Dialog、Toast、PopupWindow 本质上都直接是通过 WindowManager.addView() 显示的（没有经过 AMS），所以不会对生命周期有任何影响。
+- 如果是启动一个 `Theme` 为 `Dialog` 或 `Transparent` 的 Activity , 则生命周期为： A.onPause -> B.onCrete -> B.onStart -> B.onResume。
+	- 注意这边没有前一个 Activity 不会回调 onStop，因为只有在 Activity 切到后台不可见才会回调 onStop；
+	- 弹出 Dialog 主题的 Activity 时前一个页面还是可见的，只是失去了焦点而已所以仅有 onPause 回调。
+	- > 这是因为透明的弹窗前一个 Acitivity 被认为其实还可见
 
+#### Activity 在 onResume 之后才显示的原因是什么
+- `onCreate` 方法里调用 `setContentView` 。里面是直接调用 `window` 的 `setContentView`，创建一个 `DecorView` 用来包住我们创建的布局。
+- 加载好了布局，生成一个 `ViewTree` ，`WindowManager#addView` 方法最终将 `DecorView` 添加到 `WMS`。
+- 在 `onResume` 回调之后，会创建一个 `ViewRootImpl` ，有了它之后应用端就可以和 `WMS` 进行双向调用了。同时也是通过 `ViewRootImpl` 从 `WMS` 申请 `Surface` 来绘制 `ViewTree` 
 
+#### onActivityResult 在哪两个生命周期之间回调
+> You will receive this call immediately before onResume() when your activity is re-starting
+`onActivityResult` 回调先于该 Activity 的所有生命周期回调，从 B Activity 返回 A Activity 的生命周期调用为： B.onPause -> A.onActivityResult -> A.onRestart -> A.onStart -> A.onResume
+
+####
