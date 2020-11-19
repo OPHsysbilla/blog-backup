@@ -15,7 +15,7 @@ categories: 面试
 1. [Android初级、中级、高级、资深工程师(架构师、专家)技能图谱](https://www.jianshu.com/p/659381fcd4e5)
 
 2. [面试官: 说一下你做过哪些性能优化?](https://juejin.im/post/6844904105438134286)
-
+3. [面试之Android性能优化](https://www.zybuluo.com/TryLoveCatch/note/1302255)
 <!--more-->
 
 ## Binder怎么学

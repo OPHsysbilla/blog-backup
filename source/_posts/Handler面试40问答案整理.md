@@ -6,17 +6,39 @@ tags:
     - 面试
 categories: 面试
 ---
+摘自 [Handler高频40问] (https://mubu.com/doc/4AOg4eG-V2v)
+- `epoll` 有什么优势？`Handler` 和管道(`Pipe`)的关系？`Android M` 开始，将 `Pipe` 换成了 `eventFd`是为什么？`Handler` 底层为什么使用管道，而不是 `Binder` ？`Handler` 可以 `IPC` 通信吗？
+<!--more-->
 
+# 何理解 nativePollOnce() 方法？
+    1. 最终会调用到 Native 层的 pollInner() 方法。
+    2. 在 pollInner() 中，处理流程：
+        a. 先调用 epoll_wait()，这是阻塞方法，用户等待事件发生或超时。
+        b. 对于 epoll_wait() 返回，当且仅当一下三种情况出现时，才会返回。
+            POLL_ERROR，发生错误，直接跳转到 Done。
+            POLL_TIMEOUT，发生超时，直接跳转到 Done。
+            检测到管道有事件发生，则根据情况做响应的处理
+                如果是管道有事件发生，则直接读取管道的数据。
+                如果是其他事件，则处理 request，生成对应的 response 对象，push 到 response 数组。
+        c. 进入 Done 标记为的代码段。
+            先处理 Native 的 Message，调用 Native 的 Handler 来处理 Message。
+            再处理 Response 数组，POLL_CALLBACK 类型的事件。
+        d. 返回后，Java 层继续处理
 # Handler MessageQueue 无消息时，为什么不出现 ANR
 ANR需要先埋下炸弹，限时时间里解除才不会导致炸弹炸毁
 Handler在无消息的时候是挂起的，直到下个消息来nativeWake()才接着做
+> 应用未在规定的时间内处理 AMS 指定的任务才会 ANR。AMS 调用到应用端的 Binder 线程，应用再将任务封装成 Message 发送到主线程 Handler ，Looper.loop() 通过 MessageQueue.next() 拿到这个消息进行处理。如果不能及时处理这个消息呢，肯定是因为在它前面有耗时的消息处理，或者因为这个任务本身就很耗时。所以 ANR 不是因为 loop 循环，而是因为主线程中有耗时任务
+
 1. `MessageQueue` 无消息时，会进入 `nativePollOnce()`休眠，此时无消息，处于休眠状态；
-2. `MessageQueue` 有消息时，会立即通过 `nativeWake()` 唤醒去处理消息；
-<!--more-->
+2. `MessageQueue` 有消息时，会立即通过 `nativeWake()` 唤醒去处理消息（通过往 `eventfd` 发起一个写操作，这样主线程就会收到一个可读事件进而从休眠状态被唤醒）
 
 # 如果 Java 层 MessageQueue 中消息很少，但是响应时间却很长，是什么原因？
 1. `MessageQueue` 队列中，该 `Message` 前的 `Message` 处理较为耗时；
 2. `Native` 层消息过多，`Java` 层 `MessageQueue` 消息优先级最低，最后处理；
+    > 先处理`Native Message`，再处理`Native Request`，最后处理`Java Message`。就是因为Native有消息才用Handler+epoll的，不然只有Java的消息wait() + notify()就够了
+
+## 将Pipe换成了eventFd是为什么？
+eventFd只用打开一个文件描述符，pipe要打开2个文件描述符，且要拷贝数据，eventFd用于通知消耗更少，完美兼容epoll逻辑，毕竟后出
 
 # Handler 分发事件优先级，是否都可拦截？拦截的优先级如何？
 可以统一拦截消息，**但无法拦截通过Runnable通过`getPostMessage(Runnable r)`生成的`Message`**。
@@ -28,6 +50,8 @@ Handler的`dispatchMessage`函数里：
             handleCallback(msg);
         } else {
             if (mCallback != null) {
+                // mCallback 处理完如果返回 false，还是会继续往下走，再交给 Handler.handleMessage 处理的
+                // 所以这边可以通过反射去 hook 一个 Handler ，可以监听 Handler 处理的每个消息，也可以改 msg 里面的值
                 if (mCallback.handleMessage(msg)) {
                     return;
                 }
@@ -53,7 +77,7 @@ Handler的`dispatchMessage`函数里：
 `ActivityThread`的main方法，主动调用 Looper.prepareMainLooper() 和 Looper.loop()
 
 # 异步Message和Message同步屏障是什么
-`MessageQueue`是基于触发时间`msg.when`时间戳倒序的优先级队列，使用同步屏障保证队列中靠后的消息会优先得到执行。一般只有Android系统能调用
+`MessageQueue`是基于触发时间`msg.when`时间戳倒序队列（时间戳越小的，`msg.when`越小的，排在前面），使用同步屏障保证队列中靠后的消息会优先得到执行。一般只有Android系统能调用
 
 1. 同步 Message：普通 Message；
 2. 异步 Message：`msg.setAsynchronous(true)`
@@ -305,7 +329,6 @@ Handler的`dispatchMessage`函数里：
 很危险可能造成死锁，是`@hide`不允许非系统调用
 - 如果timeout超时了，不阻塞调用线程了直接`return false`，但是没有取消`runnable`的逻辑消息还是会排队排到执行。
 - 调用线程进入阻塞(`wait()`)，不排队排到执行完成不会被唤醒，如果当前runnable里的代码持有别的锁，会造成死锁，本调用线程永远不执行了
-
 
 
 ```JAVA

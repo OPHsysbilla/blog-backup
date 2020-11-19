@@ -6,13 +6,15 @@ tags:
 
 ---
 # 异步I/O
-见从中断讲起的好文：[epoll 的本质是什么？](https://my.oschina.net/editorial-story/blog/3052308?p=2)
+1. 见从中断讲起的好文：[epoll 的本质是什么？](https://my.oschina.net/editorial-story/blog/3052308?p=2)
+2. 然后可以看[彻底搞懂epoll高效运行的原理
+](https://mp.weixin.qq.com/s/FRg_lSHDiZofzTZApU6z9Q)
 linux的网络IO中是不存在异步IO的，linux的网络IO处理的第二阶段总是阻塞等待数据copy完成的。真正意义上的网络异步IO是Windows下的IOCP（IO完成端口）模型
 <!--more-->
-
+## 各种I/O模型
 ![各种I/O模型](https://blog-10039692.file.myqcloud.com/1500017105443_4641_1500017105783.png)
 > non-blocking IO仅仅要求处理的第一阶段不block即可，而asynchronous IO要求两个阶段都不能block住
-# select、poll、epoll之间的区别
+## select、poll、epoll之间的区别
 `select` ，`poll` ，`epoll` 都是**I/O多路复用**的机制，都是同步I/O。都需要在读写事件就绪后自己负责进行读写，也就是说这个读写过程是**阻塞**的。好处在于可以以较少的代价来同时监听处理多个IO。
 > **异步I/O**则无需自己负责进行读写，其实现会负责*把数据从内核拷贝到用户空间*。  
 `epoll`是`Linux`所特有，而`select`则应该是`POSIX`所规定，一般操作系统均有实现
@@ -44,3 +46,48 @@ epoll有它的使用场景，更适合于处理高并发的场合。
 
 游戏服务器一般是`one loop per thread`
 多线程服务器此文 [陈硕的 Blog](https://www.cnblogs.com/solstice/archive/2010/02/12/multithreaded_server.html)
+
+## 零拷贝
+> 摘自：[浅谈 Linux下的零拷贝机制](https://www.jianshu.com/p/e76e3580e356)
+
+1. 传统I/O
+> `DMA`(`Direct Memory Access`) 直接内存访问 ：允许外设组件将I/O数据直接传送到主存储器中并且传输不需要CPU的参与，将CPU解放出来
+4次用户空间与内核空间的上下文切换，以及4次数据拷贝。
+其中4次数据拷贝中包括了2次DMA拷贝和2次CPU拷贝
+![传统I/O](https://upload-images.jianshu.io/upload_images/4235178-40631870dd4c58db.jpeg?imageMogr2/auto-orient/strip|imageView2/2/w/426/format/webp)
+   - 通过DMA引擎将内核缓冲区中的数据传递到协议引擎(第四次拷贝: socket buffer ——> protocol engine)，这次拷贝是一个独立且异步的过程（将要发送的数据放入到了一个待发送的队列中后就可以返回了）。
+2. 通过`sendfile`实现的零拷贝I/O
+3次数据拷贝中包括了2次DMA拷贝和1次CPU拷贝
+![sendfile()零拷贝](https://upload-images.jianshu.io/upload_images/4235178-66c23adafbfbd47f.jpeg?imageMogr2/auto-orient/strip|imageView2/2/w/418/format/webp)
+3. 支持 `scatter` / `gather` 的DMA达成非CPU拷贝
+2次用户空间与内核空间的上下文切换，以及2次非CPU拷贝的拷贝
+![scatter / gather 的DMA](https://upload-images.jianshu.io/upload_images/4235178-df9323d3ae59b8f8.jpeg?imageMogr2/auto-orient/strip|imageView2/2/w/432/format/webp)
+   - 没有数据拷贝到socket缓冲区，只有相应的描述符信息会被拷贝到相应的socket缓冲区当中。该描述符包含了两方面的信息：a)kernel buffer的内存地址；b)kernel buffer的偏移量
+   - sendfile零拷贝消除了所有内核空间缓冲区与用户空间缓冲区之间的数据拷贝过程，因此应用程序无法对数据进行操作
+4. 通过`mmap`实现的零拷贝I/O（可以修改数据，但比`sendfile`昂贵）
+4次用户空间与内核空间的上下文切换，以及3次数据拷贝。其中3次数据拷贝中包括了2次DMA拷贝和1次CPU拷贝。
+![mmap的零拷贝](https://upload-images.jianshu.io/upload_images/4235178-2700bead4cf14739.jpeg?imageMogr2/auto-orient/strip|imageView2/2/w/429/format/webp)
+   - 用户空间和内核空间共享这个缓冲区，不需要将数据从内核空间到用户空间的一次拷贝
+   - 用户空间可以操作缓冲区
+
+### Java 的 NIO DirectByteBuffer
+> 里面的图是[It’s all about buffers: zero-copy, mmap and Java NIO](https://medium.com/@xunnan.xu/its-all-about-buffers-zero-copy-mmap-and-java-nio-50f2a1bfc05c)的翻译版
+1. `HeapByteBuffer` ：调用`ByteBuffer.allocate()`时返回
+   - JVM堆分配，被GC控制优化与回收。
+   - 不是页对齐(`page aligned`)的。如果要和JNI底层代码通信，JVM会拷贝这部分内容到一个页对齐的缓冲区(`aligned buffer space`)
+2. `DirectByteBuffer` ：调用`ByteBuffer.allocateDirect()`时返回。
+   - 底层直接`malloc()`，不由JVM管理，需要自动手动释放内存防止内存泄漏
+   - 页对齐(`page aligned`)的。可以直接和底层代码通信（例如OpenGL）
+3. `MappedByteBuffer`：调用`FileChannel.map()`时返回
+   - 是`mmap()`的包装类，用户空间虚拟内存和内核空间物理内存直接映射
+   - `private` 模式是 `copy on write`， 若要修改则自己再拷贝一份到用户空间。不对其他映射相同位置的程序文件可见。
+   - `READ_WRITE` 模式，`unmmp`写完后需要刷新 `TLB` 缓存和内存，修改不总是对其他相同映射对程序可见
+
+
+## 文件描述符
+![文件描述符](https://img-blog.csdnimg.cn/20190421151618649.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3dhbjEzMTQx,size_16,color_FFFFFF,t_70)
+- 在进程 A 中，文件描述符 1 和 20 都指向了同一个打开文件表项，标号为 23（指向了打开文件表中下标为 23 的数组元素），这可能是通过调用 dup()、dup2()、fcntl() 或者对同一个文件多次调用了 open() 函数形成的。
+- 进程 A 的文件描述符 2 和进程 B 的文件描述符 2 都指向了同一个文件，这可能是在调用 fork() 后出现的（即进程 A、B 是父子进程关系），或者是不同的进程独自去调用 open() 函数打开了同一个文件，此时进程内部的描述符正好分配到与其他进程打开该文件的描述符一样。
+- 进程 A 的描述符 0 和进程 B 的描述符 3 分别指向不同的打开文件表项，但这些表项均指向 i-node 表的同一个条目（标号为 1976）；换言之，它们指向了同一个文件。发生这种情况是因为每个进程各自对同一个文件发起了 open() 调用。同一个进程两次打开同一个文件，也会发生类似情况。 
+
+
