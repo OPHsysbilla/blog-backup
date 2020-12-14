@@ -35,6 +35,73 @@ categories: 面试
 
 ### 括号生成
 
+
+### 大根堆
+`PriorityQueue`默认是小跟堆
+
+### 归并排序 
+> [剑指 Offer 51. 数组中的逆序对](https://leetcode-cn.com/problems/shu-zu-zhong-de-ni-xu-dui-lcof/)和 [315. 计算右侧小于当前元素的个数]都是归并排序的相同方法，区别在于左指针还是右指针入队时判断
+
+[归并排序优化](https://www.cnblogs.com/noKing/p/7940531.html)
+- 当递归到规模足够小时，利用插入排序（归并排序只是需要两个有序数组，小于7的时候使用插入排序可以更节省栈空间）
+- 归并前判断一下是否还有必要归并（如果左边的最大的比右边的最小的还小(或者等于)，那就不用归并了，已经有序了）
+- 只在排序前开辟一次空间（如文中所述， `System.copyOfRange`每次会分配空间，`System.arraycopy` 只是每次在已经开辟的空间上复制 ） 
+
+#### 方法一 递归归并
+```Java
+    public int reversePairs(int[] arr) {
+        int[] temp = new int[arr.length];
+        return sort(arr, 0, arr.length - 1, temp);
+    }
+
+    // 变成 [left, mid] [mid + 1, right]的闭区间
+    public int sort(int[] arr, int left, int right, int[] temp) {
+        if (left >= right) return 0;
+        // mid + 1的时候left可能会比right大1
+
+        int mid = (right - left) / 2 + left; // 防止溢出
+        int leftReverse = sort(arr, left, mid, temp);
+        int rightReverse = sort(arr, mid + 1, right, temp);
+
+        // 对已经排序后，两个有序数组来说，此处发现已经有序，不用继续
+        if (arr[mid] <= arr[mid + 1]) return leftReverse + rightReverse;
+        return mergeS(arr, left, mid, right, temp) + leftReverse + rightReverse;
+    }
+
+    private int mergeS(int[] arr, int l, int m, int r, int[] temp) {
+        int total = r - l + 1;
+        // 拷贝一遍当前排序状态的[l, r]当作辅助数组
+        // 一个用于指针遍历，一个用于存放结果
+        // 这里是修改了原数组存放结果，拷贝的辅助数组来遍历指针
+        System.arraycopy(arr, l, temp, l, total);
+
+        int reverseNum = 0;
+        int p = l;
+        int q = m + 1;
+        for (int i = l; i <= r; i++) {
+            if (p > m) {    // 左区间指针已经走完
+                arr[i] = temp[q++];
+                // 已经没有
+            } else if (q > r) { // 右区间指针已经走完
+                arr[i] = temp[p++];
+            } else if (temp[p] <= temp[q]) { // 辅助数组大于等于时，归并排序才是稳定排序（指相同数字依然按照原数组顺序排序）
+                arr[i] = temp[p++];  // 左区间更小
+            } else {  // 右区间更小
+                arr[i] = temp[q++];
+                // 右指针前进时，左区间尚存的数都是该数都逆序数（两数组各自有序，左区间尚存的数肯定比右指针之前一个指向的数大）
+                reverseNum += m - p + 1;
+            }
+        }
+        return reverseNum;
+    }
+```
+
+### 354. 俄罗斯套娃信封问题
+长宽都需要大于另一个信封时才能被套娃
+1. 按长升序，宽降序
+> 长相同的信封不能套娃，所以长相同时需要按宽降序，忽略相同的长：使用LIS寻找不连续的上升序列的时候可以自动忽略相同的长
+2. 使用LIS对宽进行LIS，寻找不连续的上升序列
+
 ### 最长连续序列
 并查集，用v和v+1并组，每一个数字a的parent就是并查集里该组对应的最大数字b，`b - a + 1` 就是的距离取max
 
@@ -255,6 +322,7 @@ Lru在Java里就是LinkedHashMap有序字典，每次get/put后把该元素挪�
         return max;
     }
 ```
+
 
 #### 方法二 贪心 + 二分
 要使上升子序列尽可能的长，得让序列上升得尽可能慢，在上升子序列最后加上的那个数尽可能的小。

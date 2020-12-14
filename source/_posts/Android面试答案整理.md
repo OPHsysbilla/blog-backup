@@ -7,8 +7,27 @@ categories: 面试
 ---
 
 ## Retrofit(动态代理)
+> 动态代理的代理关系是在运行期确定的，Jvm帮忙生成class文件并且会删除class文件
+JDK原生动态代理是Java原生支持的，不需要任何外部依赖，但是它只能基于接口进行代理；
+CGLIB通过继承的方式进行代理，无论目标对象有没有实现接口都可以代理，但是无法处理final的情况
 
-## 说说组件化和插件化，热更新技术原理
+
+## 说说组件化和插件化， 技术原理
+## ASM应用场景
+[Gradle+Transform+Asm自动化注入代码](https://www.jianshu.com/p/fffb81688dc5)
+[字节码插桩--你也可以轻松掌握](https://www.jianshu.com/p/13d18c631549)
+[【Android】函数插桩（Gradle + ASM）](https://www.jianshu.com/p/16ed4d233fd1)
+1. 无埋点统计、APM、插桩
+其实就是在上面的基础进行各种位置的插桩,具体例子[Android无埋点数据收集SDK关键技术](http://www.jianshu.com/p/b5ffe845fe2d)
+
+2. 瘦包
+
+蘑菇街的[ThinRPlugin](http://www.jianshu.com/p/b5ffe845fe2d)插件
+相关原理：android中的R文件，除了styleable类型外，所有字段都是int型变量/常量，且在运行期间都不会改变。所以可以在编译时，记录R中所有字段名称及对应值，然后利用asm工具遍历所有class，将引用R字段的地方替换成对应常量，然后将R$styleable.class以外的所有R.class删除掉
+BTW:类似瘦包的思路：Facebook redex(不是使用asm)
+
+
+
 
 ## apk资源加载以及activitythread相关的知识，或者inputevent机制
 

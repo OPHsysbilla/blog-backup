@@ -10,6 +10,34 @@ tags:
 
 ## ThreadLocal是干嘛的，作用是什么 
 
+
+## 如何停止一个线程？使用volatile？内存屏障是什么？
+1. 使用interrupt()更改子线程的标志位，并且在子线程的while循环里判断isInterrupt()状态 [JavaDoc: How do I stop a thread](https://docs.oracle.com/javase/1.5.0/docs/guide/misc/threadPrimitiveDeprecation.html)。同时`volitale`需要和`synchronized`同用。
+> 如果一个线程在休眠中被interrupt了，那么它的中断标记位会重置为false，并抛出一个interruptedException的异常。所以有两种最佳的处理方式：
+	> 1. 方法里try-catch然后再进行一次interrupt，将中断标记位设置为true，这样调用的方法仍然能捕捉到中断信号。
+	> 2. 发现中断标记位置为true后直接方法签名上直接抛出去，这样外层一层一层往出抛，最后run()里处理这个异常。
+2. 单独使用一个`volatile`的bool标志位退出循环还是会有问题，当while循环里被阻塞的时候（比如`BlockingQueue的put函数（使用ReenterLock）`），是无法走到while判断bool标志位的地方的
+3. volatile赋值后会多执行一个`load addl $0x0, (%esp)`，相当于插入一个内存屏障：指令重排序时不能把后面的指令重排序到内存屏障之前的位置
+> 读的时候从主内存而非缓存读，写的时候有任何修改要同步更新主内存
+```
+┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
+           Main Memory
+│                               │
+   ┌───────┐┌───────┐┌───────┐
+│  │ var A ││ var B ││ var C │  │
+   └───────┘└───────┘└───────┘
+│     │ ▲               │ ▲     │
+ ─ ─ ─│─│─ ─ ─ ─ ─ ─ ─ ─│─│─ ─ ─
+      │ │               │ │
+┌ ─ ─ ┼ ┼ ─ ─ ┐   ┌ ─ ─ ┼ ┼ ─ ─ ┐
+      ▼ │               ▼ │
+│  ┌───────┐  │   │  ┌───────┐  │
+   │ var A │         │ var C │
+│  └───────┘  │   │  └───────┘  │
+   Thread 1          Thread 2
+└ ─ ─ ─ ─ ─ ─ ┘   └ ─ ─ ─ ─ ─ ─ ┘
+```
+
 ## 线程池里的参数是什么意思
 以下内容参考[Java线程池实现原理及其在美团业务中的实践](https://tech.meituan.com/2020/04/02/java-pooling-pratice-in-meituan.html)
 1. 首先检测线程池运行状态，如果不是RUNNING，则直接拒绝，线程池要保证在RUNNING的状态下执行任务。
@@ -21,6 +49,11 @@ tags:
 
 ![图4 任务调度流程](https://p0.meituan.net/travelcube/31bad766983e212431077ca8da92762050214.png)
 
+## 什么是守护进程？守护进程结束的时候一定会调用final吗
+守护进程需要在开启前设置
+JVM退出时，不必关心守护线程是否已结束，所以final可能不会被调用
+所有非守护线程都执行完毕后，无论有没有守护线程，虚拟机都会自动退出，但不是立马退出
+> 注意：守护线程不能持有任何需要关闭的资源，例如打开文件等，因为虚拟机退出时，守护线程没有任何机会来关闭文件，这会导致数据丢失
 ## 你可能知道的Java知识？
 1. clone()只拷贝第一层，[只复制第一层](https://blog.csdn.net/zhangjg_blog/article/details/18369201)
 2. 类比[处理器 - 缓存 - 内存]的三级层次，[线程 - 工作内存 - 主内存]。其中线程互相不可见彼此的工作内存，并通过主内存来共享交流。
