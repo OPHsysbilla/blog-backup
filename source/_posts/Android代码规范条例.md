@@ -9,11 +9,11 @@ categories: Android
 依然很简洁的条例，备忘用
 
 *本篇是搜集关于Android的仅以提醒作用的条例，见名知意。 相关注意事项推荐阅读《阿里巴巴的安卓手册》* 
-
+<!--more-->
 ## 条例
 1. onActivityResult()发生在onResume()之前
 15. onFinishInflate()在加载完成xml后执行：只有当自定义View，通过在XML中创建时才会调用。不从xml布局文件中解析的话，比如通过new方式创建，则不会执行该方法；
-<!--more-->
+
 16.  foreach使用前需要判空
 17. overridependingtransition()进入动画需要再startActivity之后，退出动画需要再finish后
 19. view的调用过程:构造方法->onFinishInflate->onSizeChanged->onDraw
@@ -215,6 +215,9 @@ PathMeasure.TANGENT_MATRIX_FLAG | PathMeasure.POSITION_MATRIX_FLAG);`
 115. 当一个Activity反常销毁重建的时候，请先查看下你的“不保留活动“是不是开启了。
 116. dp和px的关系，是与屏幕像素密度为160的倍数而不同：像素密度为160时1px = 1dp
 117.
+## 从AutoScroll的View说起Scroller的原理与作用
+二话不说，先看看[判断RecyclerView是否滚动到底部](https://www.cnblogs.com/jdhdevelop/p/6743501.html)中说到的computeVerticalScrollExtent()函数表示的View内容与View位置的相对滚动
+![多么美丽的一张图](https://raw.githubusercontent.com/OPHsysbilla/ophsysbilla.github.io/master/images/bg/hwo_scorll_view_act_hint.png)
 
 ## 更多应该阅读的
 1. CopyOnWriteArrayList

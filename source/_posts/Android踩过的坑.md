@@ -5,10 +5,6 @@ tags:
     - Android
 categories: Android
 ---
-## 从AutoScroll的View说起Scroller的原理与作用
-二话不说，先看看[判断RecyclerView是否滚动到底部](https://www.cnblogs.com/jdhdevelop/p/6743501.html)中说到的computeVerticalScrollExtent()函数表示的View内容与View位置的相对滚动
-![多么美丽的一张图](https://raw.githubusercontent.com/OPHsysbilla/ophsysbilla.github.io/master/images/bg/hwo_scorll_view_act_hint.png)
-
 ## 错误使用PorterDuffXferMode后效果并没有得到想要的效果！
 -> 关了硬件加速还是不行555
 ### 为何和谷歌给的样子不同？
@@ -17,7 +13,6 @@ categories: Android
 <!--more-->
 
   > 源图像在运算时，只是在源图像所在区域与对应区域的目标图像做运算。所以目标图像与源图像不相交的地方是不会参与运算的！这一点非常重要！不相交的地方不会参与运算，所以不相交的地方的图像也不会是脏数据，也不会被更新，所以不相交地方的图像也永远显示的是目标图像。 —— 《[Android高级进阶——绘图篇（五）setXfermode 设置混合模式](https://www.jianshu.com/p/78c36742d50f)》
-<!--more-->
 ### 谁是源图像谁是目标图像
 ``` JAVA
     //绘制 目标图像

@@ -8,6 +8,7 @@ categories: 面试
 ---
 # Framgnet里的setRetainInstance干嘛用的？
 在Acitivty因为`configurationChange`要销毁重建时，设置为`setRetainInstance`的Fragment的不会被重建，生命周期会受影响：
+<!--more-->
 - `onDestroy()` 和 `onCreate()` 不会调用（因为fragment没有被重建）
 - 这个`setRetainInstance`的`Framgnet`不允许在`backstack`里
 - view会被重建，但是变量不会。`onCreatedView()`会被调用

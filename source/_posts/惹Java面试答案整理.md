@@ -9,7 +9,7 @@ tags:
 
 
 ## ThreadLocal是干嘛的，作用是什么 
-
+<!--more-->
 
 ## 如何停止一个线程？使用volatile？内存屏障是什么？
 1. 使用interrupt()更改子线程的标志位，并且在子线程的while循环里判断isInterrupt()状态 [JavaDoc: How do I stop a thread](https://docs.oracle.com/javase/1.5.0/docs/guide/misc/threadPrimitiveDeprecation.html)。同时`volitale`需要和`synchronized`同用。

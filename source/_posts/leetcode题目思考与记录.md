@@ -12,7 +12,8 @@ categories: 面试
 
 # 二叉树的中序遍历
 
-¥ 爬楼梯、括号生成
+# 爬楼梯、括号生成
+<!--more-->
 
 # 删除排序数组中的重复项
 
@@ -38,6 +39,9 @@ categories: 面试
 
 ### 大根堆
 `PriorityQueue`默认是小跟堆
+
+
+### 快排优化
 
 ### 归并排序 
 > [剑指 Offer 51. 数组中的逆序对](https://leetcode-cn.com/problems/shu-zu-zhong-de-ni-xu-dui-lcof/)和 [315. 计算右侧小于当前元素的个数]都是归并排序的相同方法，区别在于左指针还是右指针入队时判断
