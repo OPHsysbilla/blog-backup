@@ -13,6 +13,43 @@ CGLIB通过继承的方式进行代理，无论目标对象有没有实现接口
 
 
 ## 说说组件化和插件化， 技术原理
+APT在编译的开始阶段对java文件进行操作，而像AscpectJ、ASM等则是在java文件编译为字节码文件后
+
+### 能否在加载类的时候，对字节码进行修改?
+利用javaAgent和ASM字节码都可以，javaAssist还有Byte-Code都可以
+![字节码增强](https://p0.meituan.net/travelcube/12e1964581f38f04488dfc6d2f84f003110966.png)
+1. [Java字节码技术(二)字节码增强之ASM、JavaAssist、Agent、Instrumentation](https://blog.csdn.net/hosaos/article/details/102931887)
+2. [美团 - 字节码增强技术探索](https://tech.meituan.com/2019/09/05/java-bytecode-enhancement.html)包含有ASM的基本用法和工具
+    > **可否在运行时对JVM中的类进行修改并重载？**：通过Instrument充当Agent + Attach API， 依赖JVMTI的Attach API机制实现
+
+
+## gradle生命周期
+
+
+## 方法数越界为啥？MultiDex是怎么做的？
+1. 方法数超过65536数会报错。
+> 早期系统中，dexopt会把每一个类的方法id检索起来，存在一个链表结构里，而这个链表的长度是用一个short类型来保存的，2字节 = 2 ^ 16 = 2 ^ 6 * 2 ^ 10 = 64 * 1024 = 64K = 65536。新版本dexopt修复了这个问题
+2. 方法数并没有超过65536，编译也完成了，但是在android2.3以前的系统安装的时候，会异常中止安装
+> `dexopt`的执行过程是在第一次加载dex文件的时候执行的。这个过程产生了一个`ODEX`文件，全称`Optimised Dex`。这个`ODEX`文件是在安装过程中从apk里提取出的可运行文件，是优化dex产生的，再把apk包里的dex文件删除，这样就做到了预先提取。如果没有ODEX文件，那么系统会从apk包中提取dex然后再运行。所以优化后可以加快软件的启动速度，预先提取，减少对RAM的占用。
+`dexopt`采用一个固定大小的缓冲区（`LinearAlloc`）来存储应用中所有方法的信息，那么之所以会出现在老版本停止安装，是因为老版本的缓冲区的大小是5M
+
+### MultiDex解决方案
+- 将APK文件中除主dex文件之外的dex文件追加到PathClassLoader（也就是BaseClassLoader）中DexPathListde Element[]数组中。这样在加载一个类的时候就会遍历所有的dex文件，保证了打包的类都能够正常加载。
+```Java
+/** 
+打包时，把一个应用分成多个dex，例：classes.dex、classes2.dex、classes3.dex…，加载的时候把这些dex都追加到DexPathList对应的数组中，这样就解决了方法数的限制。
+Andorid 5.0之后，ART虚拟机天然支持MultiDex。
+Andorid 5.0之前，系统只加载一个主dex，其它的dex采用MultiDex手段来加载。
+*/
+``` 
+> 使用反射修改DexPathList。
+> 1. 通过一定的方式把dex文件抽取出来；
+> 2. 把这些dex文件追加到DexPathList的Element[]数组的后面；
+> 3. 这个过程要尽可能的早，所以一般是在Application的attachBaseContext()方法中。
+> 由于需要IO加载额外的dex文件，应用的启动速度会降低，当其他dex文件较大的时候，甚至会出现ANR现象
+
+## 如何用代码自行生成接口？
+之前是apt，如今是 annotationProcessor
 ## ASM应用场景
 [Gradle+Transform+Asm自动化注入代码](https://www.jianshu.com/p/fffb81688dc5)
 [字节码插桩--你也可以轻松掌握](https://www.jianshu.com/p/13d18c631549)

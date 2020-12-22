@@ -166,13 +166,30 @@ synchronizied是底层的jvm的线程竞争.
 	3. 缓存机制，一次加载后类加载存在缓存里
 
 -  要判断两个类是否“相同”，就算包路径完全一致，但是加载他们的ClassLoader不一样，那么这两个类也会被认为是两个不同的类
-
 ## 可以加载类的时候，对字节码进行修改吗？
 [Java探针-Java Agent技术-阿里面试题](https://www.cnblogs.com/aspirant/p/8796974.html)
 ## JVM类加载过程，什么是双亲委派机制？
 > [吊打面试官-类加载器](https://zhuanlan.zhihu.com/p/138823011)
 ![类加载过程](https://img-blog.csdnimg.cn/20201103165654872.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L2xlaTM5NjYwMTA1Nw==,size_16,color_FFFFFF,t_70#pic_center)
-
+```JAVA
+protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException{
+        Class<?> c = findLoadedClass(name);  //查找是否加载过此类
+        if (c == null) {
+            try {
+                if (parent != null) {
+                    c = parent.loadClass(name, false);  //调用父类ClassLoader加载
+                } else {
+                    c = findBootstrapClassOrNull(name); //父类为null，表示为BootstrapClassLoader
+                }
+            } catch (ClassNotFoundException e) {
+            }
+            if (c == null) {  //父类查找为null，调用自己的查找
+                c = findClass(name);
+            }
+        }
+        return c;
+}
+```
 
 1. 加载(`ClassLoader的loadClass()方法`)
 	- 类的全限定名(如`cn.edu.hdu.test.HelloWorld.class`)读取二进制字节流
@@ -215,6 +232,14 @@ synchronizied是底层的jvm的线程竞争.
 4. 初始化一个类的派生类时（超类必须提前完成初始化操作，接口例外）
 5. JVM启动包含main方法的启动类时。
 
+#### 重载和重写
+方法调用就是指通过 .class 文件中方法的符号引用，确认方法的直接引用的过程，这个过程有可能发生在加载阶段，也有可能发生在运行阶段。
+
+1. `重载` （不同参数、返回值）的方法在加载阶段就确定了方法的直接引用。
+> 有一些方法是在加载阶段就已经确定了方法的直接引用，比如：静态方法、私有方法、实例构造器方法，这类方法的调用称为 `解析`；
+
+
+2. `重写`(`Override`) 的方法需要具体到对象的实际类型，所以需要特定的 `Java` 字节码 `invokevirtual` 去确定合适的方法
 ## 类的生命周期是什么？加载器什么时候会被unload？
 类的生命周期就是从类的加载到类实例的创建与使用，再到类对象不再被使用时可以被GC卸载回收。
 由java虚拟机自带的三种类加载器加载的类在虚拟机的整个生命周期中是不会被卸载的，只有用户自定义的类加载器所加载的类才可以被卸载。
@@ -242,6 +267,7 @@ synchronizied是底层的jvm的线程竞争.
 这也是为啥Java性能比C低的原因
 因为操作寄存器快比操作栈快
 ```
+> JVM的指令集是基于栈而不是寄存器，基于栈可以具备很好的跨平台性（因为寄存器指令集往往和硬件挂钩），但缺点在于，要完成同样的操作，基于栈的实现需要更多指令才能完成（因为栈只是一个FILO结构，需要频繁压栈出栈）。另外，由于栈是在内存实现的，而寄存器是在CPU的高速缓存区，相较而言，基于栈的速度要慢很多，这也是为了跨平台性而做出的牺牲。
 
 1. 局部变量表
 	> 编译为Class文件时，方法的Code属性中的max_locals中确定了该方法所需分配的局部变量表的最大容量。
