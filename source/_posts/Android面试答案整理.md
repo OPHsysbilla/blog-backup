@@ -5,13 +5,26 @@ tags:
     - 面试
 categories: 面试
 ---
+## 图片内存泄漏如何处理？
+
+
+## gradle生命周期
+
+<!--more-->
+## apk资源加载以及activitythread相关的知识，或者inputevent机制
+
+## Android 系统启动流程吗？
+## 知识图谱
+
+1. [Android初级、中级、高级、资深工程师(架构师、专家)技能图谱](https://www.jianshu.com/p/659381fcd4e5)
+
+2. [面试官: 说一下你做过哪些性能优化?](https://juejin.im/post/6844904105438134286)
+3. [面试之Android性能优化](https://www.zybuluo.com/TryLoveCatch/note/1302255)
 
 ## Retrofit(动态代理)
 > 动态代理的代理关系是在运行期确定的，Jvm帮忙生成class文件并且会删除class文件
 JDK原生动态代理是Java原生支持的，不需要任何外部依赖，但是它只能基于接口进行代理；
 CGLIB通过继承的方式进行代理，无论目标对象有没有实现接口都可以代理，但是无法处理final的情况
-
-<!--more-->
 
 ## 说说组件化和插件化， 技术原理
 APT在编译的开始阶段对java文件进行操作，而像AscpectJ、ASM等则是在java文件编译为字节码文件后
@@ -23,13 +36,9 @@ APT在编译的开始阶段对java文件进行操作，而像AscpectJ、ASM等�
 2. [美团 - 字节码增强技术探索](https://tech.meituan.com/2019/09/05/java-bytecode-enhancement.html)包含有ASM的基本用法和工具
     > **可否在运行时对JVM中的类进行修改并重载？**：通过Instrument充当Agent + Attach API， 依赖JVMTI的Attach API机制实现
 
-
-## gradle生命周期
-
-
 ## 方法数越界为啥？MultiDex是怎么做的？
 1. 方法数超过65536数会报错。
-> 早期系统中，dexopt会把每一个类的方法id检索起来，存在一个链表结构里，而这个链表的长度是用一个short类型来保存的，2字节 = 2 ^ 16 = 2 ^ 6 * 2 ^ 10 = 64 * 1024 = 64K = 65536。新版本dexopt修复了这个问题
+> 早期系统中，dexopt会把每一个类的方法id检索起来，存在一个链表结构里，而这个链表的长度是用一个short类型来保存的，2字节 = 2 ^ 16 = 2 ^ 6 * 2 ^ 10= 64 * 1024 = 64K = 65536。新版本dexopt修复了这个问题
 2. 方法数并没有超过65536，编译也完成了，但是在android2.3以前的系统安装的时候，会异常中止安装
 > `dexopt`的执行过程是在第一次加载dex文件的时候执行的。这个过程产生了一个`ODEX`文件，全称`Optimised Dex`。这个`ODEX`文件是在安装过程中从apk里提取出的可运行文件，是优化dex产生的，再把apk包里的dex文件删除，这样就做到了预先提取。如果没有ODEX文件，那么系统会从apk包中提取dex然后再运行。所以优化后可以加快软件的启动速度，预先提取，减少对RAM的占用。
 `dexopt`采用一个固定大小的缓冲区（`LinearAlloc`）来存储应用中所有方法的信息，那么之所以会出现在老版本停止安装，是因为老版本的缓冲区的大小是5M
@@ -63,21 +72,6 @@ Andorid 5.0之前，系统只加载一个主dex，其它的dex采用MultiDex手�
 蘑菇街的[ThinRPlugin](http://www.jianshu.com/p/b5ffe845fe2d)插件
 相关原理：android中的R文件，除了styleable类型外，所有字段都是int型变量/常量，且在运行期间都不会改变。所以可以在编译时，记录R中所有字段名称及对应值，然后利用asm工具遍历所有class，将引用R字段的地方替换成对应常量，然后将R$styleable.class以外的所有R.class删除掉
 BTW:类似瘦包的思路：Facebook redex(不是使用asm)
-
-
-
-
-## apk资源加载以及activitythread相关的知识，或者inputevent机制
-
-## Android 系统启动流程吗？
-## 知识图谱
-
-1. [Android初级、中级、高级、资深工程师(架构师、专家)技能图谱](https://www.jianshu.com/p/659381fcd4e5)
-
-2. [面试官: 说一下你做过哪些性能优化?](https://juejin.im/post/6844904105438134286)
-3. [面试之Android性能优化](https://www.zybuluo.com/TryLoveCatch/note/1302255)
-<!--more-->
-
 ## Binder怎么学
 
 1. [为什么Binder的通信只进行了一次拷贝](https://mubu.com/doc/explore/21079) ：
