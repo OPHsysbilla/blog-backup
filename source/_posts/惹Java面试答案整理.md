@@ -19,7 +19,7 @@ tags:
 2. 单独使用一个`volatile`的bool标志位退出循环还是会有问题，当while循环里被阻塞的时候（比如`BlockingQueue的put函数（使用ReenterLock）`），是无法走到while判断bool标志位的地方的
 3. volatile赋值后会多执行一个`load addl $0x0, (%esp)`，相当于插入一个内存屏障：指令重排序时不能把后面的指令重排序到内存屏障之前的位置
 > 读的时候从主内存而非缓存读，写的时候有任何修改要同步更新主内存
-```
+```JAVA
 ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
            Main Memory
 │                               │
@@ -261,7 +261,7 @@ protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundE
 
 #### [栈帧、操作数栈和局部变量表](https://juejin.im/post/6844903941805703181)分别都是什么作用呢？
 ![详解栈帧](https://img-blog.csdnimg.cn/20201104111007699.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L2xlaTM5NjYwMTA1Nw==,size_16,color_FFFFFF,t_70#pic_center)
-```
+```JAVA
 基于栈的指令集系统可以很方便的做到平台无关性(x86、arm)
 即使是赋值也要执行两次出栈操作
 这也是为啥Java性能比C低的原因
