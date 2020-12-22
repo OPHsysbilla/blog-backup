@@ -19,7 +19,7 @@ categories: 面试
 2. 分辨率大的图片需要等比例缩小
 
 ## 图片占用内存大小如何计算
-```
+```Java
 Bitmap.Config ARGB_8888：由4个8位组成，即A=8，R=8，G=8，B=8，那么一个像素点占8+8+8+8=32位（4字节）
 Bitmap.Config ARGB_4444：由4个4位组成，即A=4，R=4，G=4，B=4，那么一个像素点占4+4+4+4=16位 （2字节）
 Bitmap.Config RGB_565：没有透明度，R=5，G=6，B=5，，那么一个像素点占5+6+5=16位（2字节）
@@ -329,7 +329,7 @@ okhttp记录了每个socket流使用情况，同时设定了每个socket能同�
 
 在`onTrimMemory`时，会依次执行：
 
-```
+```JAVA
 memoryCache.trimMemory(level);
 bitmapPool.trimMemory(level);
 arrayPool.trimMemory(level);
