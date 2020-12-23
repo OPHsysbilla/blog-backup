@@ -13,35 +13,6 @@ categories: 面试
 
 ## Android 系统启动流程吗？
 
-## 图片内存泄漏如何处理
-内存泄漏是指没有使用的对象资源与GC-Root保持可达路径，导致系统无法进行回收。
-1. 使用软引用引用Bitmap，Bitmap在确定不调用后需要recycle()，然后设置为null
-2. 分辨率大的图片需要等比例缩小
-
-## 图片占用内存大小如何计算
-```Java
-Bitmap.Config ARGB_8888：由4个8位组成，即A=8，R=8，G=8，B=8，那么一个像素点占8+8+8+8=32位（4字节）
-Bitmap.Config ARGB_4444：由4个4位组成，即A=4，R=4，G=4，B=4，那么一个像素点占4+4+4+4=16位 （2字节）
-Bitmap.Config RGB_565：没有透明度，R=5，G=6，B=5，，那么一个像素点占5+6+5=16位（2字节）
-Bitmap.Config ALPHA_8：每个像素占8位，只有透明度，没有颜色。
-一个像素的位数总和越高，图像也就越逼真。
-```
-假设有一张480x800的图片
-1. 在色彩模式为`ARGB_8888`的情况下，一个像素所占的大小为4字节，会占用 `480*800*4/1024KB=1500KB` 的内存；
-2. 而在R`GB_565`的情况下，占用的内存为：`480*800*2/1024KB=750KB`
-
-## 知识图谱
-
-1. [Android初级、中级、高级、资深工程师(架构师、专家)技能图谱](https://www.jianshu.com/p/659381fcd4e5)
-
-2. [面试官: 说一下你做过哪些性能优化?](https://juejin.im/post/6844904105438134286)
-3. [面试之Android性能优化](https://www.zybuluo.com/TryLoveCatch/note/1302255)
-
-## Retrofit(动态代理)
-> 动态代理的代理关系是在运行期确定的，Jvm帮忙生成class文件并且会删除class文件
-JDK原生动态代理是Java原生支持的，不需要任何外部依赖，但是它只能基于接口进行代理；
-CGLIB通过继承的方式进行代理，无论目标对象有没有实现接口都可以代理，但是无法处理final的情况
-
 ## 说说组件化和插件化， 技术原理
 APT在编译的开始阶段对java文件进行操作，而像AscpectJ、ASM等则是在java文件编译为字节码文件后
 
@@ -74,9 +45,10 @@ Andorid 5.0之前，系统只加载一个主dex，其它的dex采用MultiDex手�
 > 3. 这个过程要尽可能的早，所以一般是在Application的attachBaseContext()方法中。
 > 由于需要IO加载额外的dex文件，应用的启动速度会降低，当其他dex文件较大的时候，甚至会出现ANR现象
 
-## 如何用代码自行生成接口？
+### 如何用代码自行生成接口？
 之前是apt，如今是 annotationProcessor
-## ASM应用场景
+
+### ASM应用场景
 [Gradle+Transform+Asm自动化注入代码](https://www.jianshu.com/p/fffb81688dc5)
 [字节码插桩--你也可以轻松掌握](https://www.jianshu.com/p/13d18c631549)
 [【Android】函数插桩（Gradle + ASM）](https://www.jianshu.com/p/16ed4d233fd1)
@@ -88,6 +60,18 @@ Andorid 5.0之前，系统只加载一个主dex，其它的dex采用MultiDex手�
 蘑菇街的[ThinRPlugin](http://www.jianshu.com/p/b5ffe845fe2d)插件
 相关原理：android中的R文件，除了styleable类型外，所有字段都是int型变量/常量，且在运行期间都不会改变。所以可以在编译时，记录R中所有字段名称及对应值，然后利用asm工具遍历所有class，将引用R字段的地方替换成对应常量，然后将R$styleable.class以外的所有R.class删除掉
 BTW:类似瘦包的思路：Facebook redex(不是使用asm)
+## 知识图谱
+1. [Android初级、中级、高级、资深工程师(架构师、专家)技能图谱](https://www.jianshu.com/p/659381fcd4e5)
+
+2. [面试官: 说一下你做过哪些性能优化?](https://juejin.im/post/6844904105438134286)
+3. [面试之Android性能优化](https://www.zybuluo.com/TryLoveCatch/note/1302255)
+
+## Retrofit(动态代理)
+> 动态代理的代理关系是在运行期确定的，Jvm帮忙生成class文件并且会删除class文件
+JDK原生动态代理是Java原生支持的，不需要任何外部依赖，但是它只能基于接口进行代理；
+CGLIB通过继承的方式进行代理，无论目标对象有没有实现接口都可以代理，但是无法处理final的情况
+
+
 ## Binder怎么学
 
 1. [为什么Binder的通信只进行了一次拷贝](https://mubu.com/doc/explore/21079) ：
@@ -174,6 +158,23 @@ Activity 的生命周期回调的阻塞并不在触发 ANR 的场景里面，所
 
 ## Handler 40问
 摘自[面试常客「Handler」的 40+ 个高频问题 Q & A 对答！](https://mp.weixin.qq.com/s?__biz=MzIxNjc0ODExMA==&mid=2247486960&idx=1&sn=9c325c52004c94f5e1a6ca80b6907962&chksm=978514d1a0f29dc77309045867f9243ed1dac77c8e3055a450553a8b84c8978cf6a4dd564939&scene=132#wechat_redirect)
+
+## 图片内存泄漏如何处理
+内存泄漏是指没有使用的对象资源与GC-Root保持可达路径，导致系统无法进行回收。
+1. 使用软引用引用Bitmap，Bitmap在确定不调用后需要recycle()，然后设置为null
+2. 分辨率大的图片需要等比例缩小
+
+## 图片占用内存大小如何计算
+```Java
+Bitmap.Config ARGB_8888：由4个8位组成，即A=8，R=8，G=8，B=8，那么一个像素点占8+8+8+8=32位（4字节）
+Bitmap.Config ARGB_4444：由4个4位组成，即A=4，R=4，G=4，B=4，那么一个像素点占4+4+4+4=16位 （2字节）
+Bitmap.Config RGB_565：没有透明度，R=5，G=6，B=5，，那么一个像素点占5+6+5=16位（2字节）
+Bitmap.Config ALPHA_8：每个像素占8位，只有透明度，没有颜色。
+一个像素的位数总和越高，图像也就越逼真。
+```
+假设有一张480x800的图片
+1. 在色彩模式为`ARGB_8888`的情况下，一个像素所占的大小为4字节，会占用 `480*800*4/1024KB=1500KB` 的内存；
+2. 而在R`GB_565`的情况下，占用的内存为：`480*800*2/1024KB=750KB`
 
 ## OkHttp相关
 ### 断点续传
