@@ -11,13 +11,82 @@ tags:
 ## ThreadLocal是干嘛的，作用是什么 
 <!--more-->
 
-## 如何停止一个线程？使用volatile？内存屏障是什么？
-1. 使用interrupt()更改子线程的标志位，并且在子线程的while循环里判断isInterrupt()状态 [JavaDoc: How do I stop a thread](https://docs.oracle.com/javase/1.5.0/docs/guide/misc/threadPrimitiveDeprecation.html)。同时`volitale`需要和`synchronized`同用。
-> 如果一个线程在休眠中被interrupt了，那么它的中断标记位会重置为false，并抛出一个interruptedException的异常。所以有两种最佳的处理方式：
+## synchronized的底层原理是什么？
+1. `synchronized`：原子性、可见性、有序性。
+   > `volatile`不具备原子性
+   > 可见性指一个线程的变量更新被其他线程所看到。需要插入一条类似`load addl $0x0, (%esp)`指令，变量更新值后需要将线程内存缓存刷回主内存。
+   > 有序性通过插入内存屏障指令防止重排序，保证某些指令一定在另一些指令前完成
+
+2. `synchronized`和`ReentrantLock`都是可重入锁。线程拥有了锁仍然还可以重复申请锁
+
+3. 同步块是由`monitorenter`指令进入，然后`monitorexit`释放锁
+   > 在执行monitorenter之前需要尝试获取锁。第二个`monitorexit`是由编译器自动生成的，在发生异常`athrow`时处理异常然后释放掉锁
+
+4. 不可中断性。前一个不释放，后一个也一直会阻塞或者等待
+   > `Lock`的`tryLock`方法是可以被中断的
+
+5. 非公平锁。`ReentrantLock`可以设置公平锁。公平锁指是不是先来先拿到的
+6. 不能知道该线程有没有拿到锁，`Lock`可以
+7. 重量级锁 > 自旋锁 > 轻量级锁 > 偏向锁，升级不可逆转。除非第一次JIT编译时锁消除，JVM自动消除
+8. - 修饰实例方法，对当前实例对象this加锁
+   - 修饰静态方法，对当前类的Class对象加锁
+   - 修饰代码块，指定一个加锁的对象，给对象加锁
+9. 锁存储在对象头的`Mark Word`里。存储对象的HashCode，分代年龄和锁标志位信息
+   > JVM堆内存中实例对象：32位机器，一个空对象占8个字节，不到8个字节对其填充会帮我们自动补齐；是数组则会分配3个字节，多出来的1个字节记录的是数组长度。64位机器是`Mark Word`8个字节，对象指针`Klass`4个字节，**对齐填充**4个字节，共16字节
+   > ![JVM堆内存中实例对象](https://img-blog.csdn.net/20170603172215966?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvamF2YXplamlhbg==/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70/gravity/SouthEast)
+
+10. `Mark Word`里有
+	- owner，指向当前获得锁的线程
+	- EntryList，等待获取锁的线程
+	- WaitList，调用wait()后释放锁的线程
+
+11. 偏向锁，CAS乐观锁比较，大多数情况下锁不存在多线程竞争且总是由同一线程获得。同一线程仅对`Mark Word`的标志位+1，非同一线程直接失败
+12. 轻量级锁在两个线程竞争偏向锁时升级，复制一份`Mark Word`到线程栈帧`Lock Record`中，CAS尝试改变锁的`owner`指针为线程
+13. 自旋锁在多个线程出现竞争轻量级锁失败时升级为。大多数情况下，线程持有锁的时间都不会太长，直接挂起线程得不偿失。自旋锁是做几个空循环等待锁，通过有限的自旋次数避免因内核态切换，会自适应判断死循环直到超出阈值
+   > 死循环是为了防止线程被挂起。异常事件和设备的中断也会发生内核态和用户态的切换。实际上用户态内核态切换耗时主要是在保存和恢复TSS任务状态段(`task state segment`)。
+14. 失败，升级为重量级。需要系统调用，用户态和内核态的转换
+
+15. `notify`/`notifyAll`方法调用后，并不会马上释放监视器锁，而是在相应的`synchronized(){}`/`synchronized`方法执行结束后才自动释放锁
+
+## 如何停止一个线程？只使用volatile可以吗？volatile内存屏障是什么？
+1. 线程处于争取锁的状态时，使用`Thread.interrupt()`是无法中断线程的。
+2. 线程处于阻塞状态时，使用`Thread.interrupt()`方式中断该线程，抛出一个`InterruptedException`。中断状态将会被复位(由中断状态改为非中断状态)。
+    > 来自[JavaDoc: How do I stop a thread](https://docs.oracle.com/javase/1.5.0/docs/guide/misc/threadPrimitiveDeprecation.html)：如果一个线程在休眠中被interrupt了，那么它的中断标记位会重置为false，并抛出一个interruptedException的异常。所以有两种最佳的处理方式：
 	> 1. 方法里try-catch然后再进行一次interrupt，将中断标记位设置为true，这样调用的方法仍然能捕捉到中断信号。
 	> 2. 发现中断标记位置为true后直接方法签名上直接抛出去，这样外层一层一层往出抛，最后run()里处理这个异常。
-2. 单独使用一个`volatile`的bool标志位退出循环还是会有问题，当while循环里被阻塞的时候（比如`BlockingQueue的put函数（使用ReenterLock）`），是无法走到while判断bool标志位的地方的
-3. volatile赋值后会多执行一个`load addl $0x0, (%esp)`，相当于插入一个内存屏障：指令重排序时不能把后面的指令重排序到内存屏障之前的位置
+3. 非阻塞状态的线程需要我们手动进行中断检测并结束程序。使用interrupt()更改子线程的标志位，并且在子线程的while循环里判断isInterrupted()状态 。
+	```JAVA 
+		public void run(){
+			while(true){
+				//判断当前线程是否被中断
+				if (this.isInterrupted()){ 
+					break;
+				}
+			} 
+		} 
+		// other place ..
+		tread.interrupt();
+	```
+4. 非阻塞状态的线程也可以用`interrupted()`
+	```JAVA
+	public void run(){
+		try {
+		//判断当前线程是否已中断,注意interrupted方法是静态的,执行后会对中断状态进行复位
+		while (!Thread.interrupted()) {
+			TimeUnit.SECONDS.sleep(2);
+		}
+		} catch (InterruptedException e) {
+
+		}
+	}
+	```
+
+### 不可以单独用volatile修饰的bool标志位退出线程循环
+> 来自[JavaDoc: How do I stop a thread](https://docs.oracle.com/javase/1.5.0/docs/guide/misc/threadPrimitiveDeprecation.html)。同时`volitale`需要和`synchronized`同用。
+单独使用一个`volatile`修饰的bool标志位退出循环还是会有问题，当while循环里被阻塞的时候（比如`BlockingQueue的put函数（使用ReenterLock）`），此时线程已经阻塞住是无法走到while判断bool标志位的地方的。
+
+### volatile内存屏障是什么
+volatile赋值后会多执行一个`load addl $0x0, (%esp)`，相当于插入一个内存屏障：指令重排序时不能把后面的指令重排序到内存屏障之前的位置
 > 读的时候从主内存而非缓存读，写的时候有任何修改要同步更新主内存
 ```JAVA
 ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
