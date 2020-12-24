@@ -7,10 +7,11 @@ tags:
 ---
 # 异步I/O
 1. 见从中断讲起的好文：[epoll 的本质是什么？](https://my.oschina.net/editorial-story/blog/3052308?p=2)
+<!--more-->
 2. 然后可以看[彻底搞懂epoll高效运行的原理
 ](https://mp.weixin.qq.com/s/FRg_lSHDiZofzTZApU6z9Q)
 linux的网络IO中是不存在异步IO的，linux的网络IO处理的第二阶段总是阻塞等待数据copy完成的。真正意义上的网络异步IO是Windows下的IOCP（IO完成端口）模型
-<!--more-->
+
 ## 各种I/O模型
 ![各种I/O模型](https://blog-10039692.file.myqcloud.com/1500017105443_4641_1500017105783.png)
 > non-blocking IO仅仅要求处理的第一阶段不block即可，而asynchronous IO要求两个阶段都不能block住

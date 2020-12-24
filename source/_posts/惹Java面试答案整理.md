@@ -9,6 +9,151 @@ tags:
 
 
 ## ThreadLocal是干嘛的，作用是什么 
+<!--more-->
+
+## synchronized的底层原理是什么？
+
+> [Java synchronized原理总结](https://zhuanlan.zhihu.com/p/29866981)
+内存可见性：
+- 对一个变量执行lock操作，将会清空工作内存中此变量的值，在执行引擎使用这个变量前需要重新执行load或assign操作初始化变量的值
+- 对一个变量执行unlock操作之前，必须先把此变量同步回主内存中（执行store和write操作）
+
+锁的内存语义：
+- 当线程释放锁时，JMM会把该线程对应的本地内存中的共享变量刷新到主内存中
+- 当线程获取锁时，JMM会把该线程对应的本地内存置为无效。从而使得被监视器保护的临界区代码必须从主内存中读取共享变量
+
+1. `synchronized`：原子性、可见性、有序性。
+   > `volatile`不具备原子性
+
+   > 可见性指一个线程的变量更新被其他线程所看到。需要插入一条类似`load addl $0x0, (%esp)`指令，变量更新值后需要将线程内存缓存刷回主内存。见内存屏障
+   > 有序性通过插入内存屏障指令防止重排序，保证某些指令一定在另一些指令前完成。`happen-before`
+
+2. `synchronized`和`ReentrantLock`都是可重入锁，都是悲观锁，都是排他锁。
+   > 可重入锁：同一个线程拥有了锁仍然还可以重复申请锁。
+   > 乐观锁：Java中是无锁编程的CAS算法。更新资源时先判断资源是否已经被修改，如果被修改则报错or重试。适合读操作多的场景。
+   > 悲观锁：在自己用同步资源的时候一定有别人会修改它，我必须锁住同步资源。适合写操作多的场景。
+   乐观锁是通过`cmpxchg`指令，去比较寄存器中的 A 和 内存中的值 V
+   - 如果相等，就把要写入的新值 B 存入内存中。
+   - 如果不相等，就将内存值 V 赋值给寄存器中的值 A。然后while循环进行重试，直到设置成功为止
+   共享锁：读锁的共享锁可保证并发读非常高效，而读写、写读、写写的过程互斥，因为读锁和写锁是分离的。
+   > `ReentrantReadWriteLock`里用一个 `int` `32bit` 高 `16bit` 表示读，低 `16bit` 表示写。除开重入的情况（同一个线程重复拿写锁，写锁+1）外，必须等写锁为0表示写锁释放后，才能拿到锁，要保证其他读线程就感知到当前写线程的操作
+
+3. 同步块是由`monitorenter`指令进入，然后`monitorexit`释放锁
+   > 在执行monitorenter之前需要尝试获取锁。第二个`monitorexit`是由编译器自动生成的，在发生异常`athrow`时处理异常然后释放掉锁
+
+4. 不可中断性。前一个不释放，后一个也一直会阻塞或者等待。所以不能用 `interrupt` 中断正在获取锁的线程
+   > `Lock`的`tryLock`方法是可以被中断的
+
+5. `synchronized`非公平锁。`ReentrantLock`可以设置公平锁。
+	- 非公平锁指会先尝试插队，插队失败再排队，可以减少唤起线程的开销，可能会饿死 线程。
+	- 公平锁缺点是吞吐率低，除第一个线程外都会阻塞，唤醒线程开销大。
+	- > 公平锁在获取同步状态时，会先判断当前线程是不是第一个线程
+6. 不能知道该线程有没有拿到锁，`Lock`可以知道当前线程是否获取到锁
+7. 重量级锁 > 轻量级锁 > 偏向锁 > 无锁，升级不可逆转。除非第一次JIT编译时锁消除，JVM自动消除。来自[不可不说的Java“锁”事](https://tech.meituan.com/2018/11/15/java-lock.html)
+8. - 修饰实例方法，对当前实例对象this加锁
+   - 修饰静态方法，对当前类的Class对象加锁
+   - 修饰代码块，指定一个加锁的对象，给对象加锁
+9. `synchronized`锁存储在对象头的`Mark Word`里。存储对象的HashCode，分代年龄和锁标志位信息。
+   
+   JVM堆内存中实例对象：
+   ![JVM堆内存中实例对象](https://pic4.zhimg.com/80/v2-85cce26769b1d9584e4af2048880307b_1440w.jpg)
+    > 多出来的1行记录的是数组长度
+
+    > 如64位机器是`Mark Word`8个字节，如果对象指针`Klass`4个字节，**对齐填充**4个字节，共16字节
+
+   `Mark Word`里存储的数据会随着锁标志位的变化而变化，以32位的JDK为例：
+   ![Mark Word存储的数据](https://pic1.zhimg.com/80/v2-5b27b769965544fb297a12c7f162e588_1440w.jpg)
+
+10. `Mark Word`里有
+	- owner，指向当前获得锁的线程
+	- EntryList，等待获取锁的线程
+	- WaitList，调用wait()后释放锁的线程，需要notify来使得线程能进EntryList
+
+11. 偏向锁比较`Thread ID`，同一线程执行同步资源时自动获取。简单地测试一下对象头的`Mark Word`里是否存储着指向当前线程的偏向锁
+   - 只需要在置换`ThreadID`的时候依赖一次CAS原子指令
+   - 大多数情况下锁不存在多线程竞争且总是由同一线程获得
+   - 获取偏向锁失败，表示至少有其他线程曾竞争过偏向锁。
+   - 偏向锁不会主动释放，等到竞争出现才释放偏向锁：当到达不执行字节码的安全点时，才会暂停拥有偏向锁的线程A。
+   	 > 如果拥有偏向锁的线程A活着，A撤销偏向锁，升级为轻量锁，正在竞争的其他线程会进入自旋等待轻量锁。
+	 > 如果线程A不活跃，对象锁变为无锁状态，重新偏向
+
+12. 轻量级锁：在线程近乎交替执行同步块时提高性能。CAS和有限自旋，避免线程阻塞和唤醒。
+   - 在当前线程A的栈帧建立一份`Lock Record`，复制一份线程A要获取的锁对象`Mark Word`到这个空间里。
+   - 自旋锁CAS尝试改变要获取的锁对象`Mark Word`指向`Lock Record`，且`Lock Record`的`owner`指向线程A。
+   - 如果复制替换失败了，判断`Mark Word`是否指向当前栈帧，有说明已经获得轻量锁。如果没有，需要自适应自旋等
+   - 若自旋失败，膨胀为重量级锁。释放轻量锁的同时，唤醒被挂起的线程角逐重量级锁。
+
+13. 重量级锁，没有获取锁的线程阻塞等待。`Mark Word`中存储的是指向互斥锁的指针，等待锁的线程都会进入阻塞状态
+	> 需要系统调用，涉及用户态和内核态的转换，通过`Monitor`来实现线程同步，`Monitor`是依赖于底层的操作系统的 `Mutex Lock`（互斥锁）来实现的。
+	> `Monitor`是线程私有的数据结构，每个线程都有可用`monitor record`列表，同时还有一个全局的可用列表。
+	> 每一个被锁住的对象都会和一个`monitor`关联
+	> `monitor`的`Owner`字段存放拥有该锁的线程的Thread ID 
+
+15. `notify`/`notifyAll`方法调用后，并不会马上释放监视器锁，而是在相应的`synchronized(){}`/`synchronized`方法执行结束后才自动释放锁
+
+## 什么是自旋锁
+自旋锁：自旋锁不会阻塞线程，只是while来让线程「等一会儿」再检查资源是否可用。
+   > - 多数情况下，线程持有锁的时间都不会太长，直接挂起线程得不偿失。自旋锁是做几个空循环等待锁，通过有限的自旋次数避免因内核态切换，会自适应判断死循环直到超出阈值。
+   > - 死循环是为了防止线程被挂起。异常事件和设备的中断也会发生内核态和用户态的切换。实际上用户态内核态切换耗时主要是在保存和恢复TSS任务状态段(`task state segment`)。
+   > - 自适应自旋锁的自旋时间由前一次在同一个锁上的自旋时间及锁的拥有者的状态来决定
+## 如何停止一个线程？只使用volatile可以吗？volatile内存屏障是什么？
+1. 线程处于争取锁的状态时，使用`Thread.interrupt()`是无法中断线程的。如尝试获取`synchronized`锁的线程无法中断停止。
+2. 线程处于阻塞状态时，使用`Thread.interrupt()`方式中断该线程，抛出一个`InterruptedException`。中断状态将会被复位(由中断状态改为非中断状态)。
+    > 来自[JavaDoc: How do I stop a thread](https://docs.oracle.com/javase/1.5.0/docs/guide/misc/threadPrimitiveDeprecation.html)：如果一个线程在休眠中被interrupt了，那么它的中断标记位会重置为false，并抛出一个interruptedException的异常。所以有两种最佳的处理方式：
+	> 1. 方法里try-catch然后再进行一次interrupt，将中断标记位设置为true，这样调用的方法仍然能捕捉到中断信号。
+	> 2. 发现中断标记位置为true后直接方法签名上直接抛出去，这样外层一层一层往出抛，最后run()里处理这个异常。
+3. 非阻塞状态的线程需要我们手动进行中断检测并结束程序。使用interrupt()更改子线程的标志位，并且在子线程的while循环里判断isInterrupted()状态 。
+	```JAVA 
+		public void run(){
+			while(true){
+				//判断当前线程是否被中断
+				if (this.isInterrupted()){ 
+					break;
+				}
+			} 
+		} 
+		// other place ..
+		tread.interrupt();
+	```
+4. 非阻塞状态的线程也可以用`interrupted()`
+	```JAVA
+	public void run(){
+		try {
+		//判断当前线程是否已中断,注意interrupted方法是静态的,执行后会对中断状态进行复位
+		while (!Thread.interrupted()) {
+			TimeUnit.SECONDS.sleep(2);
+		}
+		} catch (InterruptedException e) {
+
+		}
+	}
+	```
+
+### 不可以单独用volatile修饰的bool标志位退出线程循环
+> 来自[JavaDoc: How do I stop a thread](https://docs.oracle.com/javase/1.5.0/docs/guide/misc/threadPrimitiveDeprecation.html)。同时`volitale`需要和`synchronized`同用。
+单独使用一个`volatile`修饰的bool标志位退出循环还是会有问题，当while循环里被阻塞的时候（比如`BlockingQueue的put函数（使用ReenterLock）`），此时线程已经阻塞住是无法走到while判断bool标志位的地方的。
+
+### volatile内存屏障是什么
+volatile赋值后会多执行一个`load addl $0x0, (%esp)`，相当于插入一个内存屏障：指令重排序时不能把后面的指令重排序到内存屏障之前的位置
+> 读的时候从主内存而非缓存读，写的时候有任何修改要同步更新主内存
+```JAVA
+┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
+           Main Memory
+│                               │
+   ┌───────┐┌───────┐┌───────┐
+│  │ var A ││ var B ││ var C │  │
+   └───────┘└───────┘└───────┘
+│     │ ▲               │ ▲     │
+ ─ ─ ─│─│─ ─ ─ ─ ─ ─ ─ ─│─│─ ─ ─
+      │ │               │ │
+┌ ─ ─ ┼ ┼ ─ ─ ┐   ┌ ─ ─ ┼ ┼ ─ ─ ┐
+      ▼ │               ▼ │
+│  ┌───────┐  │   │  ┌───────┐  │
+   │ var A │         │ var C │
+│  └───────┘  │   │  └───────┘  │
+   Thread 1          Thread 2
+└ ─ ─ ─ ─ ─ ─ ┘   └ ─ ─ ─ ─ ─ ─ ┘
+```
 
 ## 线程池里的参数是什么意思
 以下内容参考[Java线程池实现原理及其在美团业务中的实践](https://tech.meituan.com/2020/04/02/java-pooling-pratice-in-meituan.html)
@@ -21,6 +166,11 @@ tags:
 
 ![图4 任务调度流程](https://p0.meituan.net/travelcube/31bad766983e212431077ca8da92762050214.png)
 
+## 什么是守护进程？守护进程结束的时候一定会调用final吗
+守护进程需要在开启前设置
+JVM退出时，不必关心守护线程是否已结束，所以final可能不会被调用
+所有非守护线程都执行完毕后，无论有没有守护线程，虚拟机都会自动退出，但不是立马退出
+> 注意：守护线程不能持有任何需要关闭的资源，例如打开文件等，因为虚拟机退出时，守护线程没有任何机会来关闭文件，这会导致数据丢失
 ## 你可能知道的Java知识？
 1. clone()只拷贝第一层，[只复制第一层](https://blog.csdn.net/zhangjg_blog/article/details/18369201)
 2. 类比[处理器 - 缓存 - 内存]的三级层次，[线程 - 工作内存 - 主内存]。其中线程互相不可见彼此的工作内存，并通过主内存来共享交流。
@@ -133,13 +283,30 @@ synchronizied是底层的jvm的线程竞争.
 	3. 缓存机制，一次加载后类加载存在缓存里
 
 -  要判断两个类是否“相同”，就算包路径完全一致，但是加载他们的ClassLoader不一样，那么这两个类也会被认为是两个不同的类
-
 ## 可以加载类的时候，对字节码进行修改吗？
 [Java探针-Java Agent技术-阿里面试题](https://www.cnblogs.com/aspirant/p/8796974.html)
 ## JVM类加载过程，什么是双亲委派机制？
 > [吊打面试官-类加载器](https://zhuanlan.zhihu.com/p/138823011)
 ![类加载过程](https://img-blog.csdnimg.cn/20201103165654872.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L2xlaTM5NjYwMTA1Nw==,size_16,color_FFFFFF,t_70#pic_center)
-
+```JAVA
+protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException{
+        Class<?> c = findLoadedClass(name);  //查找是否加载过此类
+        if (c == null) {
+            try {
+                if (parent != null) {
+                    c = parent.loadClass(name, false);  //调用父类ClassLoader加载
+                } else {
+                    c = findBootstrapClassOrNull(name); //父类为null，表示为BootstrapClassLoader
+                }
+            } catch (ClassNotFoundException e) {
+            }
+            if (c == null) {  //父类查找为null，调用自己的查找
+                c = findClass(name);
+            }
+        }
+        return c;
+}
+```
 
 1. 加载(`ClassLoader的loadClass()方法`)
 	- 类的全限定名(如`cn.edu.hdu.test.HelloWorld.class`)读取二进制字节流
@@ -182,6 +349,14 @@ synchronizied是底层的jvm的线程竞争.
 4. 初始化一个类的派生类时（超类必须提前完成初始化操作，接口例外）
 5. JVM启动包含main方法的启动类时。
 
+#### 重载和重写
+方法调用就是指通过 .class 文件中方法的符号引用，确认方法的直接引用的过程，这个过程有可能发生在加载阶段，也有可能发生在运行阶段。
+
+1. `重载` （不同参数、返回值）的方法在加载阶段就确定了方法的直接引用。
+> 有一些方法是在加载阶段就已经确定了方法的直接引用，比如：静态方法、私有方法、实例构造器方法，这类方法的调用称为 `解析`；
+
+
+2. `重写`(`Override`) 的方法需要具体到对象的实际类型，所以需要特定的 `Java` 字节码 `invokevirtual` 去确定合适的方法
 ## 类的生命周期是什么？加载器什么时候会被unload？
 类的生命周期就是从类的加载到类实例的创建与使用，再到类对象不再被使用时可以被GC卸载回收。
 由java虚拟机自带的三种类加载器加载的类在虚拟机的整个生命周期中是不会被卸载的，只有用户自定义的类加载器所加载的类才可以被卸载。
@@ -203,12 +378,13 @@ synchronizied是底层的jvm的线程竞争.
 
 #### [栈帧、操作数栈和局部变量表](https://juejin.im/post/6844903941805703181)分别都是什么作用呢？
 ![详解栈帧](https://img-blog.csdnimg.cn/20201104111007699.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L2xlaTM5NjYwMTA1Nw==,size_16,color_FFFFFF,t_70#pic_center)
-```
+```JAVA
 基于栈的指令集系统可以很方便的做到平台无关性(x86、arm)
 即使是赋值也要执行两次出栈操作
 这也是为啥Java性能比C低的原因
 因为操作寄存器快比操作栈快
 ```
+> JVM的指令集是基于栈而不是寄存器，基于栈可以具备很好的跨平台性（因为寄存器指令集往往和硬件挂钩），但缺点在于，要完成同样的操作，基于栈的实现需要更多指令才能完成（因为栈只是一个FILO结构，需要频繁压栈出栈）。另外，由于栈是在内存实现的，而寄存器是在CPU的高速缓存区，相较而言，基于栈的速度要慢很多，这也是为了跨平台性而做出的牺牲。
 
 1. 局部变量表
 	> 编译为Class文件时，方法的Code属性中的max_locals中确定了该方法所需分配的局部变量表的最大容量。

@@ -11,7 +11,9 @@ categories: 面试
 ## 说说组件化和插件化，热更新/热修复技术原理
 
 ## 冷启动优化
+## gradle生命周期
 
+<!--more-->
 ## apk资源加载以及activitythread相关的知识，或者inputevent机制
 
 ## Android 系统启动流程吗？
@@ -32,11 +34,64 @@ categories: 面试
 
 ## 知识图谱
 
+## 说说组件化和插件化， 技术原理
+APT在编译的开始阶段对java文件进行操作，而像AscpectJ、ASM等则是在java文件编译为字节码文件后
+
+### 能否在加载类的时候，对字节码进行修改?
+利用javaAgent和ASM字节码都可以，javaAssist还有Byte-Code都可以
+![字节码增强](https://p0.meituan.net/travelcube/12e1964581f38f04488dfc6d2f84f003110966.png)
+1. [Java字节码技术(二)字节码增强之ASM、JavaAssist、Agent、Instrumentation](https://blog.csdn.net/hosaos/article/details/102931887)
+2. [美团 - 字节码增强技术探索](https://tech.meituan.com/2019/09/05/java-bytecode-enhancement.html)包含有ASM的基本用法和工具
+    > **可否在运行时对JVM中的类进行修改并重载？**：通过Instrument充当Agent + Attach API， 依赖JVMTI的Attach API机制实现
+
+## 方法数越界为啥？MultiDex是怎么做的？
+1. 方法数超过65536数会报错。
+> 早期系统中，dexopt会把每一个类的方法id检索起来，存在一个链表结构里，而这个链表的长度是用一个short类型来保存的，2字节 = 2 ^ 16 = 2 ^ 6 * 2 ^ 10= 64 * 1024 = 64K = 65536。新版本dexopt修复了这个问题
+2. 方法数并没有超过65536，编译也完成了，但是在android2.3以前的系统安装的时候，会异常中止安装
+> `dexopt`的执行过程是在第一次加载dex文件的时候执行的。这个过程产生了一个`ODEX`文件，全称`Optimised Dex`。这个`ODEX`文件是在安装过程中从apk里提取出的可运行文件，是优化dex产生的，再把apk包里的dex文件删除，这样就做到了预先提取。如果没有ODEX文件，那么系统会从apk包中提取dex然后再运行。所以优化后可以加快软件的启动速度，预先提取，减少对RAM的占用。
+`dexopt`采用一个固定大小的缓冲区（`LinearAlloc`）来存储应用中所有方法的信息，那么之所以会出现在老版本停止安装，是因为老版本的缓冲区的大小是5M
+
+### MultiDex解决方案
+- 将APK文件中除主dex文件之外的dex文件追加到PathClassLoader（也就是BaseClassLoader）中DexPathListde Element[]数组中。这样在加载一个类的时候就会遍历所有的dex文件，保证了打包的类都能够正常加载。
+```Java
+/** 
+打包时，把一个应用分成多个dex，例：classes.dex、classes2.dex、classes3.dex…，加载的时候把这些dex都追加到DexPathList对应的数组中，这样就解决了方法数的限制。
+Andorid 5.0之后，ART虚拟机天然支持MultiDex。
+Andorid 5.0之前，系统只加载一个主dex，其它的dex采用MultiDex手段来加载。
+*/
+``` 
+> 使用反射修改DexPathList。
+> 1. 通过一定的方式把dex文件抽取出来；
+> 2. 把这些dex文件追加到DexPathList的Element[]数组的后面；
+> 3. 这个过程要尽可能的早，所以一般是在Application的attachBaseContext()方法中。
+> 由于需要IO加载额外的dex文件，应用的启动速度会降低，当其他dex文件较大的时候，甚至会出现ANR现象
+
+### 如何用代码自行生成接口？
+之前是apt，如今是 annotationProcessor
+
+### ASM应用场景
+[Gradle+Transform+Asm自动化注入代码](https://www.jianshu.com/p/fffb81688dc5)
+[字节码插桩--你也可以轻松掌握](https://www.jianshu.com/p/13d18c631549)
+[【Android】函数插桩（Gradle + ASM）](https://www.jianshu.com/p/16ed4d233fd1)
+1. 无埋点统计、APM、插桩
+其实就是在上面的基础进行各种位置的插桩,具体例子[Android无埋点数据收集SDK关键技术](http://www.jianshu.com/p/b5ffe845fe2d)
+
+2. 瘦包
+
+蘑菇街的[ThinRPlugin](http://www.jianshu.com/p/b5ffe845fe2d)插件
+相关原理：android中的R文件，除了styleable类型外，所有字段都是int型变量/常量，且在运行期间都不会改变。所以可以在编译时，记录R中所有字段名称及对应值，然后利用asm工具遍历所有class，将引用R字段的地方替换成对应常量，然后将R$styleable.class以外的所有R.class删除掉
+BTW:类似瘦包的思路：Facebook redex(不是使用asm)
+## 知识图谱
 1. [Android初级、中级、高级、资深工程师(架构师、专家)技能图谱](https://www.jianshu.com/p/659381fcd4e5)
 
 2. [面试官: 说一下你做过哪些性能优化?](https://juejin.im/post/6844904105438134286)
 3. [面试之Android性能优化](https://www.zybuluo.com/TryLoveCatch/note/1302255)
-<!--more-->
+
+## Retrofit(动态代理)
+> 动态代理的代理关系是在运行期确定的，Jvm帮忙生成class文件并且会删除class文件
+JDK原生动态代理是Java原生支持的，不需要任何外部依赖，但是它只能基于接口进行代理；
+CGLIB通过继承的方式进行代理，无论目标对象有没有实现接口都可以代理，但是无法处理final的情况
+
 
 ## Binder怎么学
 
@@ -124,6 +179,23 @@ Activity 的生命周期回调的阻塞并不在触发 ANR 的场景里面，所
 
 ## Handler 40问
 摘自[面试常客「Handler」的 40+ 个高频问题 Q & A 对答！](https://mp.weixin.qq.com/s?__biz=MzIxNjc0ODExMA==&mid=2247486960&idx=1&sn=9c325c52004c94f5e1a6ca80b6907962&chksm=978514d1a0f29dc77309045867f9243ed1dac77c8e3055a450553a8b84c8978cf6a4dd564939&scene=132#wechat_redirect)
+
+## 图片内存泄漏如何处理
+内存泄漏是指没有使用的对象资源与GC-Root保持可达路径，导致系统无法进行回收。
+1. 使用软引用引用Bitmap，Bitmap在确定不调用后需要recycle()，然后设置为null
+2. 分辨率大的图片需要等比例缩小
+
+## 图片占用内存大小如何计算
+```Java
+Bitmap.Config ARGB_8888：由4个8位组成，即A=8，R=8，G=8，B=8，那么一个像素点占8+8+8+8=32位（4字节）
+Bitmap.Config ARGB_4444：由4个4位组成，即A=4，R=4，G=4，B=4，那么一个像素点占4+4+4+4=16位 （2字节）
+Bitmap.Config RGB_565：没有透明度，R=5，G=6，B=5，，那么一个像素点占5+6+5=16位（2字节）
+Bitmap.Config ALPHA_8：每个像素占8位，只有透明度，没有颜色。
+一个像素的位数总和越高，图像也就越逼真。
+```
+假设有一张480x800的图片
+1. 在色彩模式为`ARGB_8888`的情况下，一个像素所占的大小为4字节，会占用 `480*800*4/1024KB=1500KB` 的内存；
+2. 而在R`GB_565`的情况下，占用的内存为：`480*800*2/1024KB=750KB`
 
 ## OkHttp相关
 ### 断点续传
@@ -279,7 +351,7 @@ okhttp记录了每个socket流使用情况，同时设定了每个socket能同�
 
 在`onTrimMemory`时，会依次执行：
 
-```
+```JAVA
 memoryCache.trimMemory(level);
 bitmapPool.trimMemory(level);
 arrayPool.trimMemory(level);
