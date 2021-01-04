@@ -9,14 +9,101 @@ categories: 面试
 ## Retrofit(动态代理)
 
 ## 说说组件化和插件化、热更新（热补丁）、热修复技术原理
+热修复与插件化都利用classloader实现加载新功能。热修复比插件化复杂，插件化只是增加新的功能或资源文件，所以不涉及抢先加载旧类的使命。热修复为了修复bug，要将新的同名类替旧的同名bug类，要抢在加载bug类之前加载新的类。
 
+## Blockcanary有什么缺点
+原理是替换logger的实现，塞了一个自己的，但你能塞，别人也能塞，别人在你blockcanary初始化后面塞进来就导致blockcanary失效了，同时对于dispatch中的耗时操作无法监控到，因为这个没有走handler是native调用的
 
+## 组件化与插件化
+以下来自[Android 浅谈模块化、组件化、插件化、热修复的简单理解](https://blog.csdn.net/csdn_aiyang/article/details/103735995?utm_medium=distribute.pc_relevant.none-task-blog-baidujs_title-3&spm=1001.2101.3001.4242)
+组件化：
+- 分成不同library，降低耦合度。
+- 解决公共依赖关系，同一层组件不能互相引用，也不能基础引用业务的这种反向引用。
+- 需要处理Activity的跳转问题。有路由和反射两种方式。
+- 资源命名问题。需要让各个组件中使用统一前缀
+插件化：
+> 实现原理
+> 1. 通过dexclassloader加载。
+> 2. 代理模式添加生命周期。
+> 3. hook思想跳过清单验证。
+- 宿主和插件分开编译
+- 动态更新插件
+- 按需下载插件
+- 缓解65535方法数限制
+热修复与插件化都利用classloader实现加载新功能，热修复比插件化复杂。
+插件化只是增加新的功能或资源文件，所以不涉及抢先加载旧类的使命。热修复为了修复bug，要将新的同名类替旧的同名bug类，要抢在加载bug类之前加载新的类。
+## 热修复
 MultiDex将本地加载的dex文件插入到DexPathList中的dexElements中，后续程序运行时就会自动到该变量中去查找新的类，这就是该篇讲的热修复的原理。
 
+### Dex分包：MultiDex
+[Android Dex分包之旅](http://yydcdut.com/2016/03/20/split-dex/index.html)含有 `65536` \  `LinearAlloc` 等问题的解决方式
+[Multidex分包Class依赖处理原理](https://yangxiaobinhaoshuai.github.io/2018/04/22/Multidex%E5%88%86%E5%8C%85Class%E4%BE%9D%E8%B5%96%E5%A4%84%E7%90%86%E5%8E%9F%E7%90%86-md/)`manifest_keep.txt`脚本源码
+DEX分包是为了解决65536方法限制，系统在应用打包APK阶段，会将有调用关系的类打包在同一个Dex文件中，并且同一个dex中的类会被打上`CLASS_ISPREVERIFIED`的标志。因为加载后的类不能卸载，必须通过重启后虚拟机进行加载才能实现修复，所以此方案不支持即时生效。
+
+### QQ空间超级补丁
+是把BUG方法修复以后放到一个patch.dex，拿到当前应用BaseDexClassloader后，通过反射获取到DexPathList属性对象pathList、再反射调用pathList的dexElements方法把patch.dex转化为`Element[]`，两个`Element[]`进行合并，最后把patch.dex插入到dexElements数组的最前面，让虚拟机去加载修复完后的方法，就可以达到修复目的。
+
+### 微信Tinker
+采用的是DEX差量包，整体替换DEX的方案。主要的原理是与QQ空间超级补丁技术基本相同，但不将patch.dex增加到elements数组中。差量的方式拿到patch.dex，开启新进程的服务TinkerPatchService，将patch.dex与应用中的classes.dex合并，得到一个新的fix_classess.dex。通过反射操作得到PathClassLoader的DexPatchList，再反射调用patchlist的makeDexElements()方法，把fix_classess.dex直接替换到Element[]数组中去，达到修复的目的。从而提高了兼容性和稳定性。
+### CLASS_ISPREVERIFIED问题
+如果引用者和被引用者的类(直接引用关系)在同一个Dex时,那么在虚拟机启动时，被引用类就会被打上CLASS_ISPREVERIFIED标志。这样被引用的类就不能进行热修复操作了。怎么办？
+
+原因是：那么我们就要阻止被引用类打上CLASS_ISPREVERIFIED标志，两个有调用关系的类不在同一个Dex文件中，那么就会抛“unexpected DEX problem”异常报错。解决办法，就是单独放一个AnitLazyLoad类在另外DEX中，在每一个类的构造方法中引用其他DEX中的唯一AnitLazyLoad类，避免类被打上CLASS_ISPREVERIFIED标志。
 ### MultiDex如何将指定class打包到主Dex中
 配置一个文件，仅该文件下的内容会被打入主Dex中
+### 模块化、组件化、插件化通讯方式不同之处
+- 模块化相互引入，抽取了公共的common模块，其他模块自然要引入这个module。
+- 组件化主流是隐式和路由。隐式使解耦和灵活大大降低，因此路由是主流。
+- 插件化本身是不同进程
+### 如何加快MultiDex的速度
+#### PreMultiDex方案
+- 安装一个新的apk的时候，先在Worker线程里做好MultiDex的解压和Optimize工作，安装apk并启动后，直接使用之前Optimize产生的odex文件，这样就可以避免第一次启动时候的Optimize工作。
+- 缺点：第一次安装的apk没有作用，而且事先需要使用内置的apk更新功能把新版本的apk文件下载下来后，才能做PreMultiDex工作。
+> 安装dex的时候，核心是创建DexFile对象并使用其Native方法对dex文件进行opt处理，同时生产一个与dex文件(.zip)同名的已经opt过的dex文件(.dex)。
+> - 如果安装dex的时候，这个opt过的dex文件已经存在，则跳过这个过程，这会节省许多耗时。
+> - 所以下载Apk完成的时候，预先解压dex文件，并预先触发安装dex文件以生产opt过的dex文件。
+#### 异步MultiDex方案
+启动App的时候，先显示一个简单的Splash闪屏界面，然后启动Worker线程执行MultiDex#install(Context)工作，就可以避免UI线程阻塞。不过要确保启动以及启动MultiDex#install(Context)所需要的类都在主dex里面(手动分包)，而且需要处理好进程同步问题。
 
-## 冷启动优化
+## art和darvlik区别
+[JAVA虚拟机与Android虚拟机的区别](https://www.jianshu.com/p/8edac8e09b3e)内有PC指针变换过程
+
+1. Delvik环境下，每次运行都需要通过及时编译器（JIT）将字节码转为机器码。
+> - 安装过程比较快，但程序启动每次都会重复的JIT（Just-In-Time）过程
+> - JIT会在运行时分析应用程序的代码，识别哪些方法可以归类为热方法，这些方法会被JIT编译器编译成对应的汇编代码，然后存储到代码缓存中，以后调用这些方法时就不用解释执行了，可以直接使用代码缓存中已编译好的汇编代码。这能显著提升应用程序的执行效率
+
+`.odex`是对dex的优化，deodex在系统第一次开机时会提取所有apk内的dex文件，odex优化将dex提前提取出，加快了开机的速度和程序运行的速度
+> `.dex`字节码，是针对Android设备优化后的DVM所使用的运行时编译字节码
+
+2. ART（Android Runtime）通过预编译（`AOT, Ahead-Of-Time`）在第一次安装时将字节码转为机器码。生成`OAT`文件，仍以.odex保存，但是与Dalvik下不同，这个文件是可执行文件。
+> dex、odex 均可通过dex2oat生成oat文件，以实现兼容性
+> 以空间换时间，可能会增加10%-20%的存储空间和更长时间的应用安装
+> 在APK安装的时候就会做预先编译动作，编译好的文件是OAT文件
+> `OAT`文件文件本质上是一个`ELF`文件，这里与`dex`(`Odex`)文件最大的区别是OAT文件不再是字节码文件，而是一个可执行文件，可以更底层的与硬件接触
+，运行时也省去了预编译和转译的时间
+
+## AsyncTask为什么坑？工程里用什么代替AsyncTask那？
+- 如果AsyncTask被声明为Activity的非静态的内部类，那么AsyncTask会保留一个对创建了AsyncTask的Activity的引用。
+- 屏幕旋转或Activity在后台被系统杀掉等情况会导致Activity的重新创建，之前运行的AsyncTask会持有一个之前Activity的引用，这个引用已经无效。
+- doInBackground方法中有一个不可中断的操作，那么cancel掉是不会让AsyncTask停止的。cancel调用了thread的interrupt操作
+- 在Android 1.6之前的版本，AsyncTask是串行的，在1.6至2.3的版本，改成了并行的。在2.3之后的版本又做了修改，可以支持并行和串行，当想要串行执行时，直接执行execute()方法，如果需要并行执行，则要执行executeOnExecutor(Executor)。
+  > 串行是通过一个ArrayDeque来完成的，这导致必须要任务必须要串行等待排队，如果中间谁阻塞时间过长会拖慢整个队列，而且不知道任务什么时候会执行
+  > 即使用executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)通过线程池并行，这个线程池也是有最大并发数限制的，超过就会报错
+- AsyncTask的并行线程池是一个静态变量，所有 AsyncTask 共享一个线程池
+### JVM 和 Darvlik VM 的区别
+1. JVM基于栈，DVM基于寄存器
+2. JVM一个类一个class文件，每个class冗余变量多，IO查找类时慢。Dalvik去除冗余并整合class，生成的是整个工程的一个dex文件。（如果分包的话，会有多个dex文件）
+> - class文件中包含多个不同的方法签名，如果A类文件引用B类文件中的方法，方法签名也会被复制到A类文件中（在虚拟机加载类的连接阶段将会使用该签名链接到B类的对应方法），多个不同的类会同时包含相同的方法签名
+
+> - dx工具对JAVA类文件重新排列，将所有JAVA类文件中的常量池分解，消除其中的冗余信息，重新组合形成一个常量池，所有的类文件共享同一个常量池
+
+3. JAVA虚拟机运行的是JAVA字节码，Dalvik虚拟机运行的是Dalvik字节码
+
+## RN和flutter绘制原理
+## Android冷启动与冷启动优化
+
+## binder机制原理
+
 ## gradle生命周期
 
 <!--more-->

@@ -11,6 +11,28 @@ tags:
 ## ThreadLocal是干嘛的，作用是什么 
 <!--more-->
 
+## 注解
+- 自定义注解与元注解
+- APT，编译时注解处理器（Annotion Process Tool）。
+  > 获取所有该注解里的参数，可以达成生成新类的目的
+- 插桩。自定义Gradle插件，利用Transform修改class文件
+- 反射，运行时动态获取注解信息 getAnnotions
+
+> Retrofit使用到了注解。
+> 1. Retrofit使用动态代理模式实现定义的网络请求接口。
+> 2. 在重写invoke方法的时候构建了一个ServiceMethod对象，再使用参数的注解分析得到网络请求方式httpMethod，拼接成一个省略域名的URL
+```JAVA
+	// 定义网络请求的API接口形如：
+	interface GithubApiService { 
+		@GET("users/{name}/repos")
+		Call<ResponseBody> searchRepoInfo(@Path("name") String name);
+	}
+```
+
+### Java 双亲委派机制的破坏—SPI机制
+SPI(Service Provider Interface 服务提供者接口)机制在**运行时**才来加载具体的接口实现类，按照SPI规范指定接口实现即可加载自定义的接口实现类，实现策略模式和热拔插效果。这是一种“面向接口编程＋策略模式＋配置文件”组合实现的动态加载机制
+> 在运行时修改资源文件可以达到加载不同实现类的功能。但是这并不是SPI的主要用法，SPI是服务提供接口，主要是给第三方用的，例如：只提供InterfaceSpi接口，不提供实现。第三方需要使用该接口时自己提供实现，然后配置在配置文件中即可。
+
 ## synchronized的底层原理是什么？
 
 > [Java synchronized原理总结](https://zhuanlan.zhihu.com/p/29866981)
@@ -40,8 +62,12 @@ tags:
 3. 同步块是由`monitorenter`指令进入，然后`monitorexit`释放锁
    > 在执行monitorenter之前需要尝试获取锁。第二个`monitorexit`是由编译器自动生成的，在发生异常`athrow`时处理异常然后释放掉锁
 
-4. 不可中断性。前一个不释放，后一个也一直会阻塞或者等待。所以不能用 `interrupt` 中断正在获取锁的线程
-   > `Lock`的`tryLock`方法是可以被中断的
+4. 不可中断性。前一个不释放，后一个也一直会阻塞或者等待。所以不能用 `interrupt()` 中断正在获取锁的线程
+  
+   > 中断操作`Thread.interrupt()`只是给线程的一个建议，最终怎么执行看线程本身的状态
+   > - 若线程被中断前，该线程处于阻塞状态(调用了 `wait` , `sleep` , `join` 方法)，那么该线程将会立即从阻塞状态中退出，并抛出一个`InterruptedException`异常，同时，该线程的中断状态被设为false, 除此之外，不会发生任何事。
+   > - 若线程被中断前，如果该线程处于非阻塞状态(未调用过wait,sleep,join方法)，那么该线程的中断状态将被设为true, 除此之外，不会发生任何事。`interrupt()`并不属于被`Thread.interrupt()`中断的阻塞番位，所以一个正在执行 `synchronized` 方法的线程被`interrupt()`并不会被中断抛出异常。
+   > `Lock`的有额外方法是可以测试中断，代码里在获取锁前测试中断状态
 
 5. `synchronized`非公平锁。`ReentrantLock`可以设置公平锁。
 	- 非公平锁指会先尝试插队，插队失败再排队，可以减少唤起线程的开销，可能会饿死 线程。
@@ -164,6 +190,8 @@ volatile赋值后会多执行一个`load addl $0x0, (%esp)`，相当于插入一
 <!--more-->
 
 ![图4 任务调度流程](https://p0.meituan.net/travelcube/31bad766983e212431077ca8da92762050214.png)
+
+> 例如：线程池总大小为128（maximumPoolSize），还有一个缓冲队列（sWorkQueue，缓冲队列可以放10个任务），当尝试去添加第139个任务时程序崩溃。当线程池中的数量大于corePoolSize，缓冲队列已满，并且线程池中的数量小于maximumPoolSize，将会创建新的线程来处理被添加的任务
 
 ## 什么是守护进程？守护进程结束的时候一定会调用final吗
 守护进程需要在开启前设置
@@ -377,13 +405,12 @@ protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundE
 
 #### [栈帧、操作数栈和局部变量表](https://juejin.im/post/6844903941805703181)分别都是什么作用呢？
 ![详解栈帧](https://img-blog.csdnimg.cn/20201104111007699.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L2xlaTM5NjYwMTA1Nw==,size_16,color_FFFFFF,t_70#pic_center)
-```JAVA
-基于栈的指令集系统可以很方便的做到平台无关性(x86、arm)
-即使是赋值也要执行两次出栈操作
-这也是为啥Java性能比C低的原因
-因为操作寄存器快比操作栈快
-```
+
+- 基于栈的指令集系统可以很方便的做到平台无关性(x86、arm)，即使是赋值也要执行两次出栈操作。这也是为啥Java性能比C低的原因，因为操作寄存器快比操作栈快
+
 > JVM的指令集是基于栈而不是寄存器，基于栈可以具备很好的跨平台性（因为寄存器指令集往往和硬件挂钩），但缺点在于，要完成同样的操作，基于栈的实现需要更多指令才能完成（因为栈只是一个FILO结构，需要频繁压栈出栈）。另外，由于栈是在内存实现的，而寄存器是在CPU的高速缓存区，相较而言，基于栈的速度要慢很多，这也是为了跨平台性而做出的牺牲。
+
+- 在编译程序代码的时候，栈帧中需要多大的局部变量表，多深的操作数栈都已经完全确定了，并且写入到方法表的Code属性中，因此一个栈帧需要多大的内存，不会受到程序运行期变量数据的影响
 
 1. 局部变量表
 	> 编译为Class文件时，方法的Code属性中的max_locals中确定了该方法所需分配的局部变量表的最大容量。
@@ -409,6 +436,7 @@ protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundE
 ## Jvm调优
 1. 常用的gc算法的特点、执行过程，和适用场景。例如g1适合对最大延迟有要求的场合，zgc适用于64为系统的大内存服务中；
 2. [常用的jvm参数，明白对不同参数的调整会有怎样的影响](https://zhuanlan.zhihu.com/p/38348646)，适用什么样的场景。例如垃圾回收的并发数、偏向锁设置等；
+[深入理解JVM(2)——GC算法与内存分配策略](https://crowhawk.github.io/2017/08/10/jvm_2/)
 3. 在编程时如何合理利用栈上分配降低gc压力、如何编写适合内联优化等代码（编译方向）
 4. 线上经常full gc问题，排查过内存泄露问题（线上实际问题的排查经验）
 5. 高并发低延迟的场景，如何调整gc参数尽量降低gc停顿时间，针对队列处理机如何尽可能提高吞吐率等（特定场景的jvm优化实践或者优化）
