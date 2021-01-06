@@ -30,6 +30,8 @@ categories: 面试
 ## Xposed
 是干嘛的？
 
+## 如何计算冷启动时间？冷启动的优化是什么？
+
 ## App启动流程
 1.首先是点击App图标，此时是运行在 `Launcher` 进程,通过 `ActivityManagerServiceBinder` IPC 的形式向 `system_server` 进程发起`startActivity` 的请求
 2. `system_server` 进程接收到请求后，通过 `Process#start` 方法向 `zygote` 进程发送创建进程的请求
@@ -40,9 +42,50 @@ categories: 面试
 5. App进程binder线程（ `ApplicationThread` ）收到请求后，通过 `Handler` 向主线程发送 `LAUNCH_ACTIVITY` 消息
 6. 主线程收到Message后，通过反射机制创建目标Activity，并回调Activity的`onCreate`
 
-## 如何计算冷启动时间？冷启动的优化是什么？
+## 屏幕刷新的原理是什么？如何减少卡顿？
+View 的 requestLayout 和 ViewRootImpl##setView 最终都会调用 ViewRootImpl 的 requestLayout 方法，然后通过 scheduleTraversals 方法向 Choreographer 提交一个绘制任务，然后再通过 DisplayEventReceiver 向底层请求 vsync 垂直同步信号，当 vsync 信号来的时候，会通过 JNI 回调回来，在通过 Handler 往消息队列 post 一个异步任务，最终是 ViewRootImpl 去执行绘制任务，最后调用 performTraversals 方法，完成绘制。
+![屏幕刷新的原理](https://upload-images.jianshu.io/upload_images/24142630-409cdaf1c5111e47?imageMogr2/auto-orient/strip|imageView2/2/w/1089/format/webp)
+[应用流畅度(FPS)监控](https://github.com/SusionSuc/AdvancedAndroid/blob/master/performance/rabbit/%E5%BA%94%E7%94%A8%E6%B5%81%E7%95%85%E5%BA%A6(FPS)%E7%9B%91%E6%8E%A7.md)
+### 卡顿原因：
+现在的App每秒中最多能绘制60帧，1000ms/60帧=16.67ms/帧，也就是说对图像绘制的要求是平均每帧的绘制时间为16.67ms
+- 主线程有其它耗时操作，导致doFrame 没有机会在 vsync 信号发出之后 16 毫秒内调用；
+- 当前doFrame方法耗时，绘制太久，下一个 vsync 信号来的时候这一帧还没画完，造成掉帧。
+事实上比起每一帧的耗时稍长来说，跳帧（掉帧）才会更易被用户察觉。1s30帧可能没影响，但是这掉的一帧时间太长是会被看出来的
+### 监控卡顿
+1. 基于主线程 `Looper` 的 Printer 分发消息的时间差值，监控每次 dispatchMessage 的执行耗时。
+	> 开源框架 `BlockCanary` 也是给 `Looper` 设置 `Printer` 来监控每个msg的操作时间的。当时耗时超过阈值，会开启一个独立线程查询此段时间内的堆栈、cpu、logcat、内存信息格式化到文件。
+	> 发送一个延时runable，如果指定的时间消息分发没有完成，说明应用发生了卡顿，这之后开始执行mRunable，在mRunable进行相关信息采集及提示APP发生卡顿
+2. 基于 `Choreographer` 回调函数 `postFrameCallback#doFrame(long)` 监控相邻两次 Vsync 事件通知的时间差。
+    > 同时通过另外一条线程循环记录主线程堆栈信息，并在每次 Vsync 事件 doFrame 通知回来时，循环注册该监听对象，间接统计两次 Vsync 事件的时间间隔，当超出阈值时，取出记录的堆栈进行分析上报
+    > 开源框架 `rabbit-client` \ `ArgusAPM` \ `LogMonitor` 都是基于此来达成的 
+3. 通过反射向Choreographer指定的队列最前端中插入了一个Runnable，在Choreographer.doFrame()时会依次运行这里插入的Runnable时依次调用。
+    > `Matrix-TraceCanary` 微信的卡顿检测方案就是如此。[微信APM Matrix解析](https://blog.yorek.xyz/android/3rd-library/matrix/)。
+	
+	> 采用的ASM插桩的方式，支持fps和堆栈获取的定位，但是需要自己根据asm插桩的方法id来自己分析堆栈，定位精确度高，性能消耗小，比较可惜的是目前没有界面展示，对代码有一定的侵入性。如果线上使用可以考虑。
+    
+	- `Matrix-TraceCanary` 老版本是用Choreographer，现在是依赖Looper.getMainLooper().setMessageLogging()，理由如下[LoopMonitor内存问题](https://github.com/Tencent/matrix/issues/203)
+	> * Choreographer 只是负责ui绘制部分的监听，ui卡顿不一定是绘制卡顿引起的，有可能是主线程耗时操作引起的ui卡顿，比如两次绘制之间有10个msg，Choreographer只能监听到这10个msg造成了卡顿，但是没办法定位到具体是哪个msg导致的卡顿，如果用looper来监听，就可以准确监听到是哪个msg导致的卡顿
+	> * 静态页面可能导致帧率较低，因此帧率低可能并不真的是卡顿，所以用这个统计出来的不是很准
+	> * 其次是不同设备帧率标准可能不一样，现在很多设备有120hz、90hz、60hz，模拟器有的是30hz
 
-### apk资源加是如何加载的？热修复的资源修复的原理是什么？
+
+前两种可以较方便的捕捉到卡顿的堆栈，但其最大的不足在于：
+1. 无法获取到各个函数的执行耗时。
+2. 通过其他线程循环获取主线程的堆栈，如果稍微处理不及时，很容易导致获取的堆栈有所偏移，不够准确。
+3. 基于消息队列的卡顿监控并不准确，正在运行的函数有可能并不是真正耗时的函数
+4. 某个线程不断地获取主线程堆栈的代价是巨大的，它要暂停主线程的运行
+    —— [Matrix Android TraceCanary Wiki](https://github.com/Tencent/matrix/wiki/Matrix-Android-TraceCanary)
+
+## 如何计算函数耗时？
+1. 在应用启动时，默认打开 Trace 功能（Debug.startMethodTracing），应用内所有函数在执行前后将会经过该函数（`dalvik` 上 `dvmMethodTraceAdd` 函数 或 `art` 上 `Trace::LogMethodTraceEvent` 函数）， 通过hack手段代理该函数，在每个执行方法前后进行打点记录。
+   > 最大的好处是能统计到包括系统函数在内的所有函数出入口，对代码或字节码不用做任何修改，所以对apk包的大小没有影响，但由于方式比较hack，在兼容性和安全性上存在一定的风险。 
+
+2. 修改字节码的方式，在编译期修改所有 class 文件中的函数字节码，对所有函数前后进行打点插桩。
+   > 利用 Java 字节码修改工具（如 BCEL、ASM、Javassis等），在编译期间收集所有生成的 class 文件，扫描文件内的方法指令进行统一的打点插桩，同样也可以高效的记录函数执行过程中的信息
+   > 无法统计系统内执行的函数，但往往造成卡顿的函数并不是系统内执行的函数
+   > 无需 hook 任何函数，所以在兼容性方面会比第一个方案更可靠。
+
+## apk资源加是如何加载的？热修复的资源修复的原理是什么？
 [android 应用的启动过程分析](https://www.jianshu.com/p/a1f40b39b3de)
 App启动流程中 `attachApplication()` 方法，最终通过binder，跨进程调用到 `ApplicationThread#bindApplication()` 然后调用`ActivityThread#handleBindApplication` 方法，我们从这个方法开始看
 
