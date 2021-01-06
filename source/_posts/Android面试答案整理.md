@@ -298,7 +298,7 @@ ANR 的四种场景：
 Activity 的生命周期回调的阻塞并不在触发 ANR 的场景里面，所以并不会直接触发 ANR。只不过死循环阻塞了主线程，如果系统再有上述的四种事件发生，就无法在相应的时间内处理从而触发 ANR
 
 ## Handler 40问
-摘自[面试常客「Handler」的 40+ 个高频问题 Q & A 对答！](https://mp.weixin.qq.com/s?__biz=MzIxNjc0ODExMA==&mid=2247486960&idx=1&sn=9c325c52004c94f5e1a6ca80b6907962&chksm=978514d1a0f29dc77309045867f9243ed1dac77c8e3055a450553a8b84c8978cf6a4dd564939&scene=132#wechat_redirect)
+见[Handler面试40问答案整理](https://ophsysbilla.github.io/2020-11-16-Handler%E9%9D%A2%E8%AF%9540%E9%97%AE%E7%AD%94%E6%A1%88%E6%95%B4%E7%90%86.html)
 
 ## 图片内存泄漏如何处理
 内存泄漏是指没有使用的对象资源与GC-Root保持可达路径，导致系统无法进行回收。
