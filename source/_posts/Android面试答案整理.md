@@ -8,6 +8,59 @@ categories: 面试
 
 ## Retrofit(动态代理)
 
+## RN和flutter绘制原理
+## Android冷启动与冷启动优化
+
+## binder机制原理
+
+## gradle生命周期
+
+<!--more-->
+## apk资源加载以及activitythread相关的知识，或者inputevent机制
+
+## Android 系统启动流程吗？
+
+## Activity的启动流程
+
+## AMS启动流程
+
+## 预热webview；预加载离线包；
+## 点击屏幕后触发的流程讲一下，从硬件开始说。
+
+## Xposed
+是干嘛的？
+
+## App启动流程
+1.首先是点击App图标，此时是运行在 `Launcher` 进程,通过 `ActivityManagerServiceBinder` IPC 的形式向 `system_server` 进程发起`startActivity` 的请求
+2. `system_server` 进程接收到请求后，通过 `Process#start` 方法向 `zygote` 进程发送创建进程的请求
+`zygote` 进程 `fork` 出新的子进程，即 `App` 进程
+3. 然后进入 `ActivityThread#main` 方法中，这时运行在App进程中，通过 `ActivityManagerServiceBinder` IPC的形式向 `system_server` 进程发起 `attachApplication` 请求
+	> 获得AMS(ActivityManagerService)实例调用 `mgr.attachApplication(mAppThread);`
+4. `system_server` 接收到请求后，进行一些列准备工作后，再通过 `Binder` IPC 向App进程发送 `scheduleLaunchActivity` 请求
+5. App进程binder线程（ `ApplicationThread` ）收到请求后，通过 `Handler` 向主线程发送 `LAUNCH_ACTIVITY` 消息
+6. 主线程收到Message后，通过反射机制创建目标Activity，并回调Activity的`onCreate`
+
+## 如何计算冷启动时间？冷启动的优化是什么？
+
+### apk资源加是如何加载的？热修复的资源修复的原理是什么？
+[android 应用的启动过程分析](https://www.jianshu.com/p/a1f40b39b3de)
+App启动流程中 `attachApplication()` 方法，最终通过binder，跨进程调用到 `ApplicationThread#bindApplication()` 然后调用`ActivityThread#handleBindApplication` 方法，我们从这个方法开始看
+
+Apk的资源是通过AssetManager.addAssetPath方法来完成加载，那么我们就可以通过反射构建自己的AssetManager对象，然后把调用addAssetPath加载自己的资源，然后把自己构建的AssetManager通过反射设置给mAssets变量，这样下次加载资源就是用的我们AssetManager，也就是用的我们更换后的资源
+
+### AndResGuard如何达到资源优化的？
+[从R文件索引看资源优化](https://linjiang.tech/2020/01/20/r-resources-arsc/)
+[浅谈Android中的R文件作用以及将R资源inline减少包大小](https://yuweiguocn.github.io/android-r-inline/)
+[关于-r-的一切](https://medium.com/@morefreefg/%E5%85%B3%E4%BA%8E-r-%E7%9A%84%E4%B8%80%E5%88%87-355f5049bc2c
+[每日一问 这么多R.java 有卵用呀？](https://wanandroid.com/wenda/show/9974)
+- Android在构建过程中会根据资源生成R文件，里面包含了资源索引，使用该索引可以在最终生成的`resources.arsc`资源映射表中找到对应资源
+- 在Library工程中引用的R资源索引不是final的。同时一个资源在两个module中重复定义了，R.txt文件中会存在多份
+- java编译器在编译时会将final常量进行inline内联操作，也就是App工程中的java源码编译后的class中使用的R资源索引全部会替换为常量值
+- 最后使用的都是`resources.arsc`，所以R文件可以精简
+  1. 可以在编译完成之后将 module 里面对于 R 的引用换成「内联」的，这样就可以少了一次内存寻址，也可以删掉被内联后的 R.class，减少了包体积又做了性能优化。
+  2. 可以在编译的时候通过固定 id 来减少增删改资源带来的大量 id 变动，导致 R.java 被“连根拔起”，带来下游依赖它的 java/kotlin 文件重新编译。 
+  > stable-ids 在「热修复」、「插件化」中有很大的用处
+
 ## 说说组件化和插件化、热更新（热补丁）、热修复技术原理
 热修复与插件化都利用classloader实现加载新功能。热修复比插件化复杂，插件化只是增加新的功能或资源文件，所以不涉及抢先加载旧类的使命。热修复为了修复bug，要将新的同名类替旧的同名bug类，要抢在加载bug类之前加载新的类。
 
@@ -34,6 +87,9 @@ categories: 面试
 插件化只是增加新的功能或资源文件，所以不涉及抢先加载旧类的使命。热修复为了修复bug，要将新的同名类替旧的同名bug类，要抢在加载bug类之前加载新的类。
 ## 热修复
 MultiDex将本地加载的dex文件插入到DexPathList中的dexElements中，后续程序运行时就会自动到该变量中去查找新的类，这就是该篇讲的热修复的原理。
+
+## 热修复资源替换
+资源注入：资源的动态加载则相对简单。主要是参考Instant Run，通过反射调用AssetsManager的addAssets方法，将增量资源包加载到内存中来，得到新的Resources对象，然后替换掉ActivityThread等所有持有Resources的地方即可。这也是大部分热修复框架中的基本思路。
 
 ### Dex分包：MultiDex
 [Android Dex分包之旅](http://yydcdut.com/2016/03/20/split-dex/index.html)含有 `65536` \  `LinearAlloc` 等问题的解决方式
@@ -82,14 +138,6 @@ DEX分包是为了解决65536方法限制，系统在应用打包APK阶段，会
 > `OAT`文件文件本质上是一个`ELF`文件，这里与`dex`(`Odex`)文件最大的区别是OAT文件不再是字节码文件，而是一个可执行文件，可以更底层的与硬件接触
 ，运行时也省去了预编译和转译的时间
 
-## AsyncTask为什么坑？工程里用什么代替AsyncTask那？
-- 如果AsyncTask被声明为Activity的非静态的内部类，那么AsyncTask会保留一个对创建了AsyncTask的Activity的引用。
-- 屏幕旋转或Activity在后台被系统杀掉等情况会导致Activity的重新创建，之前运行的AsyncTask会持有一个之前Activity的引用，这个引用已经无效。
-- doInBackground方法中有一个不可中断的操作，那么cancel掉是不会让AsyncTask停止的。cancel调用了thread的interrupt操作
-- 在Android 1.6之前的版本，AsyncTask是串行的，在1.6至2.3的版本，改成了并行的。在2.3之后的版本又做了修改，可以支持并行和串行，当想要串行执行时，直接执行execute()方法，如果需要并行执行，则要执行executeOnExecutor(Executor)。
-  > 串行是通过一个ArrayDeque来完成的，这导致必须要任务必须要串行等待排队，如果中间谁阻塞时间过长会拖慢整个队列，而且不知道任务什么时候会执行
-  > 即使用executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)通过线程池并行，这个线程池也是有最大并发数限制的，超过就会报错
-- AsyncTask的并行线程池是一个静态变量，所有 AsyncTask 共享一个线程池
 ### JVM 和 Darvlik VM 的区别
 1. JVM基于栈，DVM基于寄存器
 2. JVM一个类一个class文件，每个class冗余变量多，IO查找类时慢。Dalvik去除冗余并整合class，生成的是整个工程的一个dex文件。（如果分包的话，会有多个dex文件）
@@ -99,33 +147,12 @@ DEX分包是为了解决65536方法限制，系统在应用打包APK阶段，会
 
 3. JAVA虚拟机运行的是JAVA字节码，Dalvik虚拟机运行的是Dalvik字节码
 
-## RN和flutter绘制原理
-## Android冷启动与冷启动优化
-
-## binder机制原理
-
-## gradle生命周期
-
-<!--more-->
-## apk资源加载以及activitythread相关的知识，或者inputevent机制
-
-## Android 系统启动流程吗？
-
-## Activity的启动流程
-
-## AMS启动流程
-
-## 预热webview；预加载离线包；
 
 ## Zygote Fork进程为什么是用socket，为什么不用binder？
 - fork只能拷贝当前线程，不支持多线程的fork
 - 不建议在多线程环境使用Fork，而Binder是多线程的。
 怕父进程binder线程有锁，然后子进程的主线程一直在等其子线程(从父进程拷贝过来的子进程)的资源，但是其实父进程的子进程并没有被拷贝过来，造成死锁，所以fork不允许存在多线程。而非常巧的是Binder通讯偏偏就是多线程，所以干脆父进程（Zgote）这个时候就不使用binder线程
 > 互斥锁是导致无法在多线程环境使用Fork的根本原因，大部分系统中，锁的实现基本是用户态，并非内核态（用户态更加高效）。假设在fork之前，一个线程对某个锁进行lock操作，另一个线程进行fork子进程，会导致持有锁的子线程消失了，那这个锁就会永久锁定，假如另一个线程获取该锁，就会导致死锁了。
-
-## 点击屏幕后触发的流程讲一下，从硬件开始说。
-
-## 知识图谱
 
 ## 说说组件化和插件化， 技术原理
 APT在编译的开始阶段对java文件进行操作，而像AscpectJ、ASM等则是在java文件编译为字节码文件后
@@ -475,4 +502,16 @@ arrayPool.trimMemory(level);
 > You will receive this call immediately before onResume() when your activity is re-starting
 `onActivityResult` 回调先于该 Activity 的所有生命周期回调，从 B Activity 返回 A Activity 的生命周期调用为： B.onPause -> A.onActivityResult -> A.onRestart -> A.onStart -> A.onResume
 
-####
+## lateinit var和by lazy
+lateinit var只是让编译期忽略对属性未初始化的检查，后续在哪里以及何时初始化还需要开发者自己决定。
+by lazy 用了双重检测初始化 SynchronizedLazyImpl， 保证变量在被取到的时候初始化一次
+
+
+## AsyncTask为什么坑？工程里用什么代替AsyncTask那？
+- 如果AsyncTask被声明为Activity的非静态的内部类，那么AsyncTask会保留一个对创建了AsyncTask的Activity的引用。
+- 屏幕旋转或Activity在后台被系统杀掉等情况会导致Activity的重新创建，之前运行的AsyncTask会持有一个之前Activity的引用，这个引用已经无效。
+- doInBackground方法中有一个不可中断的操作，那么cancel掉是不会让AsyncTask停止的。cancel调用了thread的interrupt操作
+- 在Android 1.6之前的版本，AsyncTask是串行的，在1.6至2.3的版本，改成了并行的。在2.3之后的版本又做了修改，可以支持并行和串行，当想要串行执行时，直接执行execute()方法，如果需要并行执行，则要执行executeOnExecutor(Executor)。
+  > 串行是通过一个ArrayDeque来完成的，这导致必须要任务必须要串行等待排队，如果中间谁阻塞时间过长会拖慢整个队列，而且不知道任务什么时候会执行
+  > 即使用executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)通过线程池并行，这个线程池也是有最大并发数限制的，超过就会报错
+- AsyncTask的并行线程池是一个静态变量，所有 AsyncTask 共享一个线程池
