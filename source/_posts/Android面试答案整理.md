@@ -32,6 +32,16 @@ categories: 面试
 
 ## 如何计算冷启动时间？冷启动的优化是什么？
 
+## 事件分发
+
+1. [Android事件分发机制 详解攻略，您值得拥有](https://blog.csdn.net/carson_ho/article/details/54136311)
+
+## 如何减少卡顿？刷新原理
+
+![img](https://user-gold-cdn.xitu.io/2020/3/27/17117aa6eb5b454e?imageView2/0/w/1280/h/960/format/webp/ignore-error/1)
+
+
+
 ## App启动流程
 1.首先是点击App图标，此时是运行在 `Launcher` 进程,通过 `ActivityManagerServiceBinder` IPC 的形式向 `system_server` 进程发起`startActivity` 的请求
 2. `system_server` 进程接收到请求后，通过 `Process#start` 方法向 `zygote` 进程发送创建进程的请求
@@ -480,18 +490,6 @@ okhttp记录了每个socket流使用情况，同时设定了每个socket能同�
 - java.lang.OutOfMemoryError: PermGen space ------>java永久代溢出，即方法区溢出了，一般出现于大量Class或者jsp页面，或者采用cglib等反射机制的情况，因为上述情况会产生大量的Class信息存储于方法区。此种情况可以通过更改方法区的大小来解决，使用类似-XX:PermSize=64m -XX:MaxPermSize=256m的形式修改。另外，过多的常量尤其是字符串也会导致方法区溢出。
 - java.lang.StackOverflowError ------> 不会抛OOM error，但也是比较常见的Java内存溢出。JAVA虚拟机栈溢出，一般是由于程序中存在死循环或者深度递归调用造成的，栈大小设置太小也会出现此种溢出。可以通过虚拟机参数-Xss来设置栈的大小。
 
-
-
-## 事件分发
-
-1. [Android事件分发机制 详解攻略，您值得拥有](https://blog.csdn.net/carson_ho/article/details/54136311)
-
-## 如何减少卡顿？刷新原理
-
-![img](https://user-gold-cdn.xitu.io/2020/3/27/17117aa6eb5b454e?imageView2/0/w/1280/h/960/format/webp/ignore-error/1)
-
-
-
 ## Glide是如何监听周期的？
 
 #### 监听生命周期
@@ -558,3 +556,67 @@ by lazy 用了双重检测初始化 SynchronizedLazyImpl， 保证变量在被�
   > 串行是通过一个ArrayDeque来完成的，这导致必须要任务必须要串行等待排队，如果中间谁阻塞时间过长会拖慢整个队列，而且不知道任务什么时候会执行
   > 即使用executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)通过线程池并行，这个线程池也是有最大并发数限制的，超过就会报错
 - AsyncTask的并行线程池是一个静态变量，所有 AsyncTask 共享一个线程池
+
+## IM进程为什么单开一个进程？
+IM单开进程是因为压到后台时，进程越大越容易被杀掉、进程优先级越低越容易被杀掉
+
+## IM协议包头都包含什么？
+1. 包长度
+2. 包序列号 SEQ
+3. 操作类型 COMMAND （比如心跳、文本消息、重置消息）
+4. 返回码
+5. 为了兼容加入的协议版本号
+6. 了负载均衡加入的模块id
+……
+
+> ———[移动IM开发指南1：如何进行技术选型](http://yunxin.163.com/blog/im9-0608/)
+## 你知道有什么后台保活方式？
+- 第一种主要有系统闹钟，各种事件的 BroadcastReceiver，任务被移除的回调通知等。
+
+- 第二种已知的就是在 4.4 及以前版本上，使用 native 进程，并将该进程从 davilk 父进程中脱离，挂接到 init 进程上，以此避开系统的查杀。然后在这个 native 进程中，定时唤起应用。为了让这个 native 进程更轻巧，可以使用 exec 的方式启动一个可执行文件，以除掉直接 fork 带入的 Zygote 进程环境。另外，这种方式也被用在监听自己应用被卸载时弹出调查窗口。
+
+- 第三种方式互相调用指定的 Service，或发指定得广播即可，互相唤醒。
+
+> —— [Android 即时通讯开发小结（一）](http://yunxin.163.com/blog/im5-0608/)
+
+## 长连接和心跳为什么要这样设计？
+- 对于客户端而言，使用 TCP 长连接来实现业务的最大驱动力在于：在当前连接可用的情况下，每一次请求都只是简单的数据发送和接受，免去了 DNS 解析，连接建立等时间，大大加快了请求的速度，同时也有利于接受服务器的实时消息
+- 接保持的前提必然是检测连接的可用性（对方还活着），并在连接不可用时主动放弃当前连接并建立新的连接。
+
+### 可以使用TCP自带的Keep Alive来做长连接吗
+不用。
+- Keep Alive时间太长，且固定在系统参数里。
+- keepalive只能检测连接是否存活，不能检测连接是否可用。比如服务器因为负载过高导致无法响应请求但是连接仍然存在，此时keepalive无法判断连接是否可用。
+- 如果TCP连接中的另一方因为停电突然断网，我们并不知道连接断开，此时发送数据失败会进行重传，由于重传包的优先级要高于keepalive的数据包，因此keepalive的数据包无法发送出去。只有在长时间的重传失败之后我们才能判断此连接断开了。
+
+
+## 群发消息如何做保障避免消息风暴扩散？
+群消息还是非常有意思的，可达性、实时性、离线消息、消息风暴扩散等等等等，做个总结：
+
+1）不管是群在线消息，还是群离线消息，应用层的ACK是可达性的保障；
+2）群消息只存一份，不用为每个用户存储离线群msg_id，只需存储一个最近ack的群消息id/time；
+3）为了减少消息风暴，可以批量ACK；
+4）如果收到重复消息，需要msg_id去重，让用户无感知；
+5）离线消息过多，可以分页拉取（按需拉取）优化。
+> ——[群消息这么复杂，怎么能做到不丢不重？](https://mp.weixin.qq.com/s?__biz=MjM5ODYxMDA5OQ==&mid=2651959643&idx=1&sn=844afa6a31770fa587474ecd73c3b3b3&chksm=bd2d04878a5a8d91c5c93ad8e85254185c63eb419457efbedcba54a9b8a9053da1e8980a694a&scene=21#wechat_redirect)
+
+## 如何保证不丢消息
+1）im系统是通过超时、重传、确认、去重的机制来保证消息的可靠投递，不丢不重
+2）一个“你好”的发送，包含上半场msg:R/A/N与下半场ack:R/A/N的6个报文
+
+3）im系统难以做到系统层面的不丢不重，只能做到业务层面的不丢不重
+> ——[微信为什么不丢消息？](https://mp.weixin.qq.com/s?__biz=MjM5ODYxMDA5OQ==&mid=2651959606&idx=1&sn=f9561231dd33bcd0550b8d0d59d6b876&chksm=bd2d04ea8a5a8dfce90c870279a7f74b7aedd802c2d699dd919d7e40ebe30699381517c2d54b&scene=21#wechat_redirect)
+
+## 如何加快dns耗费的时间？
+DNS 解析速度无比龟速，一次 DNS 解析的时间甚至能赶上一次 TCP 连接的时间，几秒，十几秒，甚至三，四十秒的请求时间都很常见。另一方面，由于运营商的不作为和作为，移动网络下 DNS 也呈现了解析准确度低和经常被劫持的状态。
+
+针对这些情况可以考虑使用 HTTP DNS，github 也有很多开源的实现，比如HttpDNSLib。而最激进的方法自然是像前面优化 lbs 一样，在个个环节中避免 DNS 解析：
+
+lbs 返回服务器 ip 而非域名
+本地缓存 lbs ip 地址备用，请求 lbs 时优先使用 ip 而非域名
+> ——[移动IM开发指南3：如何优化登录模块](https://zhuanlan.zhihu.com/p/38926987)
+
+## 如何防作弊考勤签到？
+- LBS + wifi/基站位置
+- GPS 方式的位置信息来自卫星，精度很高，但是 GPS 方式仅在户外有效，其首次获取位置时间较长并且非常耗费电量。
+
