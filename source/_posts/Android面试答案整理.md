@@ -6,6 +6,8 @@ tags:
 categories: 面试
 ---
 
+算法 、 Android基础、 梳理下自己做过的项目的细节，了解下原理
+
 ## Retrofit(动态代理)
 
 ## RN和flutter绘制原理
@@ -40,6 +42,53 @@ categories: 面试
 
 ![img](https://user-gold-cdn.xitu.io/2020/3/27/17117aa6eb5b454e?imageView2/0/w/1280/h/960/format/webp/ignore-error/1)
 
+
+## Serializable 和 Parceable 原理
+- Serializable 的原理是通过 `ObjectInputStream` 和 `ObjectOutputStream` 来实现的
+通过反射递归序列化内部对象
+  > 可以重写writeObject 和 readObject 方法，实现序列化的加密功能，或者版本兼容
+	```Java
+	// 序列化
+	E/test:SerializableTestData writeReplace
+	E/test:SerializableTestData writeObject
+
+	// 反序列化
+	E/test:SerializableTestData readObject
+	E/test:SerializableTestData readResolve
+	```
+  > 默认会忽略 static 变量以及被声明为 transient 的字段
+
+## SharedPreferences是跨进程安全的吗？工程中用什么替代？
+可以mmkv，ContentProvider也更适合跨进程共享
+
+
+## ContentProvider 的原理是什么？为啥工程选用ContentProvider而不是AIDL来IPC
+- 利用了 Android 的 Binder 和匿名共享内存机制。
+- 通过 Binder 传递 CursorWindow 对象内部的匿名共享内存的文件描述符。这样在跨进程传输中，结果数据并不需要跨进程传输，而是在不同进程中通过传输的匿名共享内存文件描述符来操作同一块匿名内存，这样来实现不同进程访问相同数据的目的
+
+
+使用上需要注意：
+- 对于 `client` 端就是通过 `context.getContentResolver() `来获取到一个 `ContentResolver` 对象，然后调用对象的 `query`， `delete` ，`update` 等方法
+- 通过方法中的 `Uri` 参数来匹配的到相应的 `contentprovider` 的
+- `ContentProvider` 会先于 `Application` 的 `onCreate` 生成， 它的`onCreate` 是在主线程执行，`query` 等四个函数是在子线程，`call` 函数是自定义的需要自己check
+- 没安装 ContentProvider就先安装
+> - 当 `provider` 进程不存在时，先创建进程并 `publish` 相关的 `provider`
+> - 进程已经存在，但是`provider` 不存在的话，会用 oneway 的binder请求创建并进入 `wait()` 状态，安装完provider信息,则 `notifyAll()` 处于等待状态的进程/线程
+- 如果 ContentProvider 是 exported，当支持执行 SQL 语句时就需要注意 SQL 注入的问题。另外如果我们传入的参数是一个文件路径，然后返回文件的内容，这个时候也要校验合法性，不然整个应用的私有数据都有可能被别人拿到
+
+
+### 为什么使用ContentProvider存在调用进程被杀死的情况？ 
+在4.1之前，应用程序访问了ContentProvider，但是这个ContentProvider意外挂了，这个时候应用程序也将被连带杀死；
+4.1之后。ContentProvider 会维持一个引用计数：
+- `Stable` provider：若使用过程中，provider要是挂了，你的进程也必挂。
+- `Unstable` provider：若使用过程中，provider要是挂了，你的进程不会挂。但你会收到一个DeadObjectException的异常，可进行容错处理。
+
+### 插件中没有在manifest中注册的ContentProvider如何跑起来
+- 定义一个占坑的ContentProvider（运行在一个独立的进程）
+- hook掉插件Activity的Context,并返回自定义的PluginContentResolver
+- PluginContentResolver在获取ContentProvider时，先把个占坑的ContentProvider唤醒。即让它在ActivityManagerService中跑起来
+- 返回给插件一个IContentProvider的动态代理。
+> ——[VirtualApk插件化关于ContentProvider的处理](http://susion.work/2019/02/28/android%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/framework/ContentProvider%E5%90%AF%E5%8A%A8%E8%BF%87%E7%A8%8B%E5%88%86%E6%9E%90/)
 
 
 ## App启动流程
@@ -570,14 +619,22 @@ IM单开进程是因为压到后台时，进程越大越容易被杀掉、进程
 ……
 
 > ———[移动IM开发指南1：如何进行技术选型](http://yunxin.163.com/blog/im9-0608/)
-## 你知道有什么后台保活方式？
-- 第一种主要有系统闹钟，各种事件的 BroadcastReceiver，任务被移除的回调通知等。
+## 老生常谈，你知道有什么后台保活方式？
+保活可以减少 Application 创建跟初始化的时间，让冷启动变成温启动。
+都是想要提高进程优先级`OOM_ADJ`，且在进程被杀死后拉活。
+> ——[进程保活](https://blog.yorek.xyz/android/paid/zsxq/week16-keep-app-alive/)
 
+- 监听息屏和解锁的广播，在息屏时启动一个只有一个像素的透明Activity，此时应用就位于前台了，优先级为0。在解锁时将此Activity销毁。
+  > 如果保活的Activity位于另外一个进程中，需要注意广播只能在代码中动态注册。
+- 利用JobScheduler机制。搭配前台Service技术提高进程优先级
+- 第一种主要有系统闹钟，各种事件的 BroadcastReceiver，任务被移除的回调通知等。带通知的前台Service。
+  > 从8.0开始，很多广播只能在代码中动态注册，无法静态注册。也就是说，App被杀死后，无法接收到系统的广播了
 - 第二种已知的就是在 4.4 及以前版本上，使用 native 进程，并将该进程从 davilk 父进程中脱离，挂接到 init 进程上，以此避开系统的查杀。然后在这个 native 进程中，定时唤起应用。为了让这个 native 进程更轻巧，可以使用 exec 的方式启动一个可执行文件，以除掉直接 fork 带入的 Zygote 进程环境。另外，这种方式也被用在监听自己应用被卸载时弹出调查窗口。
 
 - 第三种方式互相调用指定的 Service，或发指定得广播即可，互相唤醒。
 
 > —— [Android 即时通讯开发小结（一）](http://yunxin.163.com/blog/im5-0608/)
+
 
 ## 长连接和心跳为什么要这样设计？
 - 对于客户端而言，使用 TCP 长连接来实现业务的最大驱动力在于：在当前连接可用的情况下，每一次请求都只是简单的数据发送和接受，免去了 DNS 解析，连接建立等时间，大大加快了请求的速度，同时也有利于接受服务器的实时消息
@@ -620,3 +677,18 @@ lbs 返回服务器 ip 而非域名
 - LBS + wifi/基站位置
 - GPS 方式的位置信息来自卫星，精度很高，但是 GPS 方式仅在户外有效，其首次获取位置时间较长并且非常耗费电量。
 
+## Android动画原理
+`Android`中动画分为3种：
+`Tween Animation`（补间动画）：通过对场景里的对象不断做图像变换产生的动画效果。只支持RotateAnimation旋转、 AlphaAnimation透明度、 ScaleAnimation缩放、 TranslateAnimation移动。
+  > 只是改变了view的绘制，view的点击区域及位置没有真正变化
+
+`Frame Animation`（帧动画）：顺序播放事先做好的图像，是一种画面转换动画。类似多个图片的连续播放
+  > - 要在代码中调用Imageview的setBackgroundResource方法，如果直接在XML布局文件中设置其src属性当触发动画时会FC。
+  > - 在动画start()之前要先stop()，不然在第一次动画之后会停在最后一帧，这样动画就只会触发一次。
+  > - 不要在onCreate中调用start，因为AnimationDrawable还没有完全跟Window相关联，如果想要界面显示时就开始动画的话，可以在onWindowFoucsChanged()中调用start()。
+
+`Property Animation`：属性动画，通过动态地改变对象的属性从而达到动画效果，属性动画为API 11新特性。会真正改变view的属性
+  > `ValueAnimator`封装了一个`Interpolator`定义了属性值在开始值与结束值之间的插值方法。 表示fraction
+  > 还封装了一个`TypeAnimator`，根据开始、结束值与`TimeIniterpolator`计算得到的`fraction`计算出属性值。常用的是`FloatEvaluator`，生成float类型的变化。表示value
+  > 子类 `ObjectAnimator` 设置自定义属性时，必须有对应的一个setter函数：set<PropertyName>（驼峰命名法）和相应属性的getter方法：get<PropertyName>
+  > 使用Node来达成二叉树保存动画依赖

@@ -10,6 +10,21 @@ tags:
 
 ## ThreadLocal是干嘛的，作用是什么 
 <!--more-->
+- 每个线程Thread维护了ThreadLocalMap这么一个Map变量，保证线程隔离且有唯一的ThreadLocal
+- 创建ThreadLocalMap的key是ThreadLocal对象本身（保证同一个线程总是取到同一个ThreadLocal），value则是要存储的对象
+- 会造成内存泄漏
+## Java集合小抄
+[Java后台面试 常见问题](https://www.jianshu.com/p/1acdfac2b4e4)
+[《Java并发编程的艺术》笔记](https://www.jianshu.com/p/8d90dc5b341e)
+[关于Java集合的小抄](https://cloud.tencent.com/developer/article/1342550)
+[ashMap解析（主要JDK1.8，附带1.7出现的问题以及区别）](https://bbs.huaweicloud.com/blogs/173908)
+
+synchronizedList是使用了同步代码块，vector是使用了同步方法，所以synchronizedList性能比vector要好
+——[坑人无数的Java面试题之ArrayList](https://zhuanlan.zhihu.com/p/34301705)
+
+
+## 从ReentrantLock的实现看AQS的原理及应用
+[从ReentrantLock的实现看AQS的原理及应用](https://tech.meituan.com/2019/12/05/aqs-theory-and-apply.html)
 
 ## 注解
 - 自定义注解与元注解
@@ -283,7 +298,19 @@ https://blog.csdn.net/qq_36520235/article/details/82417949?utm_medium=distribute
 > `static final int UNTREEIFY_THRESHOLD = 6;`
 
 ## 37. Hashmap为什么是线程不安全的？在多线程情况下扩容会出现 CPU 接近 100%的情况吗？是因为出现了死循环吗？
-HashMap在put的时候，插入的元素超过了容量（由负载因子决定）的范围就会触发扩容操作，就是rehash，这个会重新将原数组的内容重新hash到新的扩容数组中，在多线程的环境下，存在同时其他的元素也在进行put操作，如果hash值相同，可能出现同时在同一数组下用链表表示，造成闭环，导致在get时会出现死循环，所以HashMap是线程不安全的
+[7.多线程下put和get操作导致的HashMap线程不安全问题](https://blog.csdn.net/u014590757/article/details/79509101)
+可能产生的现象会是： 
+- 1)put进行的data有可能丢失了 
+- 2)一些通过remove(Object key)删除掉的元素(返回删除成功)又出来了。 
+- 3)多线程检测到HashMap容量超过负载因子时会进行多次的resize，由于要rehash，所以消耗的性能也是巨大的。 
+
+1. 发生在index相同的情况下，大家拿到的链头可能不是最新的，后一个会直接覆盖了前一个 
+2. 而且当多条线程检测到容量超过负载因子时，会能发生多次resize。 
+
+小结一下：remove与put都是一样的，由于大家拿到的不是最新链头，只要大家在Entry数组的index相同时(经过hash后的index)，就有可能出现后一个覆盖前一个的操作，即前一个的操作无效。 
+
+
+> HashMap在put的时候，插入的元素超过了容量（由负载因子决定）的范围就会触发扩容操作，就是rehash，这个会重新将原数组的内容重新hash到新的扩容数组中，在多线程的环境下，存在同时其他的元素也在进行put操作，如果hash值相同，可能出现同时在同一数组下用链表表示，造成闭环，导致在get时会出现死循环，所以HashMap是线程不安全的
 
 ##  38. hashmap的计算hash值时为什么要用低 16 位与高 16 位进行异或运算
 用hashCode的高16位和低16位是为了减少碰撞，因为高16位一直没用到：计算下标时会`&`一个` (length - 1)`的mask，`&`操作后只有低位用到了
@@ -393,10 +420,23 @@ protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundE
 ## 类的生命周期是什么？加载器什么时候会被unload？
 类的生命周期就是从类的加载到类实例的创建与使用，再到类对象不再被使用时可以被GC卸载回收。
 由java虚拟机自带的三种类加载器加载的类在虚拟机的整个生命周期中是不会被卸载的，只有用户自定义的类加载器所加载的类才可以被卸载。
+
 ## 说说Java内存回收
 年轻代：主要用来存放新创建的对象，年轻代分为eden区和两个Survivor区。大部分对象在Eden区中生成。当Eden区满时，还存活的对象会在两个Survivor区交替保存，达到一定次数的对象会晋升到老年代
+## 怎么知道哪些变量内存泄漏了？类什么时候会被回收？
+可达性分析算法：一个对象到GC Roots没有任何引用链相连，从GC Roots到这个对象不可达时，则证明此对象是不可用的。
+### 可作为GC Roots的对象包括下面几种：
+虚拟机栈（栈帧中的本地变量表）中引用的对象。
+本地方法栈中JNI（即一般说的Native方法）引用的对象。
+方法区中类静态属性引用的对象。
+方法区中常量引用的对象。
 
-## jvm的内存模型和java的内存模型
+### 对方法区的回收
+永久代的垃圾收集主要回收两部分内容：废弃常量和无用的类。
+判定一个常量是否是“废弃常量”比较简单，而要判定一个类是否是“无用的类”的条件则相对苛刻许多。类需要同时满足下面3个条件才能算是“无用的类”：
+该类所有的实例都已经被回收，也就是Java堆中不存在该类的任何实例。
+加载该类的ClassLoader已经被回收。
+该类对应的java.lang.Class对象没有在任何地方被引用，无法在任何地方通过反射访问该类的方法。## jvm的内存模型和java的内存模型
 ### Java内存模型（Java Memory Model）与并发问题相关
 1. 保证共享内存的正确性(可见性、有序性、原子性)
 2. 缓存一致性：多线程的场景中，每个核都至少有一个L1 缓存。所有的变量都存储在主内存中，每条线程还有自己的工作内存，线程的工作内存中保存了该线程中是用到的变量的主内存副本拷贝。
@@ -407,7 +447,9 @@ protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundE
 刷新缓存或禁用指令重排序指令，解决不同线程并发读写主存同一个位置时**缓存一致性**的问题
 ![在这里插入图片描述](https://img-blog.csdnimg.cn/20201104114138160.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L2xlaTM5NjYwMTA1Nw==,size_16,color_FFFFFF,t_70#pic_center)
 
-#### JVM的内存模型![jvm的内存模型](https://img-blog.csdnimg.cn/20201104110937322.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L2xlaTM5NjYwMTA1Nw==,size_16,color_FFFFFF,t_70#pic_center)
+#### JVM的内存模型
+![jvm的内存模型](https://img-blog.csdnimg.cn/20201104110937322.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L2xlaTM5NjYwMTA1Nw==,size_16,color_FFFFFF,t_70#pic_center)
+
 
 #### [栈帧、操作数栈和局部变量表](https://juejin.im/post/6844903941805703181)分别都是什么作用呢？
 ![详解栈帧](https://img-blog.csdnimg.cn/20201104111007699.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L2xlaTM5NjYwMTA1Nw==,size_16,color_FFFFFF,t_70#pic_center)
