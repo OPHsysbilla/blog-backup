@@ -43,6 +43,23 @@ categories: 面试
 ![img](https://user-gold-cdn.xitu.io/2020/3/27/17117aa6eb5b454e?imageView2/0/w/1280/h/960/format/webp/ignore-error/1)
 
 
+## 内存泄漏原理是什么，LeakCanary是怎么检测到内存分析的？
+- LeakCanary将已经销毁的Activity和Fragment所对应的实例放入到弱引用中，并关联一个引用队列。通过registerActivityLifecycleCallbacks来注册对于我们销毁的Activity的监听.
+
+- 如果实例进行了回收，那么弱引用就会放入到ReferenceQueue中
+- 如果一段时间后，所监控的实例还未在ReferenceQueue中出现，那么可以证明出现了内存泄漏导致了实例没有被回收
+
+- 使用lifeCycle来监听Activity和Fragment的生命周期，在onDestory()、onViewDestroy、onFragmentDestroy()时会调用`watch()`检查
+
+- `watch()`会生成一个Activity的UUID到retainedKeys队列中，retainedKeys队列记录了我们执行了监控的引用对象。而queue中会保存回收的引用。所以通过二者的对比，我们就可以找到内存泄漏的引用了
+
+- `watch()`在主线程空闲的时候 `Looper.myQueue().addIdleHandler()`一直检测，多次重试后最终会掉哟罡`ensureGone`
+
+- 如果监控对象没有回收，执行一次gc()，检测移除已经回收的监控对象，如果还是没有回收，证明发生了内存泄漏。此时dump出hprof文件到另一个前台服务IntentService，启动时会调用onHandleIntent方法，该方法在父类中实现了。实现中会调用onHandleIntentInForeground()方法
+	> 对于执行垃圾回收需要使用Runtime.getRuntime().gc()， 
+
+- 调用接口，将结果回调给listenerClassName所对应的类（这里是DisplayLeakService类）来进行处理
+
 ## Serializable 和 Parceable 原理
 - Serializable 的原理是通过 `ObjectInputStream` 和 `ObjectOutputStream` 来实现的
 通过反射递归序列化内部对象
@@ -692,3 +709,47 @@ lbs 返回服务器 ip 而非域名
   > 还封装了一个`TypeAnimator`，根据开始、结束值与`TimeIniterpolator`计算得到的`fraction`计算出属性值。常用的是`FloatEvaluator`，生成float类型的变化。表示value
   > 子类 `ObjectAnimator` 设置自定义属性时，必须有对应的一个setter函数：set<PropertyName>（驼峰命名法）和相应属性的getter方法：get<PropertyName>
   > 使用Node来达成二叉树保存动画依赖
+
+
+## View的事件分发流程
+[View的事件分发流程](https://juejin.cn/post/6844903902257627144)
+1. 如果你在500毫秒内抬起手指，那么你就只能执行点击事件，不能执行长按事件；
+2. 如果你在500毫秒后抬起，并且你设置了onLongClickListener并在onLongClick()方法中返回了false 或者 你没有设置
+3. onLongClickListener回调，那么你执行完长按事件后还可以执行点击事件
+4. 如果你设置了onLongClickListener回调并在onLongClick()方法中返回了true，那么你就不能执行点击事件
+5. OnLongClickListener的onLongClick()方法的优先级高于onClickListener的onClick()方法
+6. 手指在抬起前，不小心移动了一下，就会触发ACTION_CANCEL或ACTION_MOVE，这个时候它就会根据条件(手指是否移出View的范围)通过调用 removeLongPressCallback()或 removeTapCallback()方法移除CheckForLongPress或CheckForTap任务
+
+1. 如果同时设置了OnTouchListener、OnLongClickListener和OnClickListener回调，根据优先级事件的传递顺序是：`onTouch() -> onLongClick() -> onClick()`
+> 其中除了`onClick()`都有boolean返回值，返回值能决定下一个方法是否被调用，`onClick()`优先级最低，连返回值都没有
+
+> `onTouch()` 在 `dispatchTouchEvent() `中
+
+> 检查长按的在`View::onTouchEvent()`的A`CTION_DOWN`中，如果View是可以点击的，`View::onTouchEvent()`最终一定返回true，表示消费了此事件。父容器就不会继续找了
+
+2. 如果大家希望自己的View增加它的touch范围，可以尝试使用TouchDelegate
+3. enable = false 状态下的View是直接消费点击事件
+4. 
+
+```Java 
+    // View.java   
+	// View的dispatchTouchEvent()方法开始进入View的事件分发流程
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        boolean result = false;
+		ListenerInfo li = mListenerInfo;
+		if (li != null && li.mOnTouchListener != null
+				&& (mViewFlags & ENABLED_MASK) == ENABLED
+				&& li.mOnTouchListener.onTouch(this, event)) { // 先询问listener.onTouch
+			result = true;
+		}
+		if (!result && onTouchEvent(event)) { // 询问本view的onTouchEvent。如果控件可点击(clickabale或longClickabale，只要有一个为true)，onTouchEvent()返回true。
+			result = true;
+		}
+        return result;
+    }
+```
+
+```Java
+
+
+```
