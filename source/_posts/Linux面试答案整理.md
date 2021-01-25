@@ -5,6 +5,18 @@ tags:
     - 面试
 
 ---
+## 在Linux下进程通信
+1、匿名管道(pipe)
+2、命名管道(FIFO)
+3、信号(signal)
+4、信号量(semaphore)
+5、消息队列(message queue)
+6、共享内存(share memory)
+7、套接字(Socket)
+ 
+## mmu什么
+[arm-linux学习-（MMU内存管理单元）](https://www.cnblogs.com/alantu2018/p/9002309.html)
+
 # 异步I/O
 1. 见从中断讲起的好文：[epoll 的本质是什么？](https://my.oschina.net/editorial-story/blog/3052308?p=2)
 <!--more-->

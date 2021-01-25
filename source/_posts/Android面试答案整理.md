@@ -281,11 +281,80 @@ DEX分包是为了解决65536方法限制，系统在应用打包APK阶段，会
 3. JAVA虚拟机运行的是JAVA字节码，Dalvik虚拟机运行的是Dalvik字节码
 
 
+## 点击屏幕后触发的流程讲一下，从硬件开始说。
+
+## 
+[事件分发三连问：事件是如何从屏幕点击最终到达 Activity 的？CANCEL 事件什么时候会触发？如何解决滑动冲突？](https://blog.csdn.net/Androiddddd/article/details/108804170)
+
+## ActivityThread是UI线程吗，它并没有继承自Thread？ActivityThread 中的 H 用来干嘛的
+> 当Zygote启动时，会分裂出system_server并进行不断地ipc轮询,system_server会创建AMS等服务。当你在桌面点击一个app图标时，并且这个app在内存中是无实例的。ams会通知system_server,由system_server通知Zygote去fork出子进程并执行ActivityThread的main方法。main方法的调用是在子进程的主线程中。
+ActivityThread就是主线程
+内部类 H 继承 Handler 用来接受Application和Activity的各种生命事件
+
+
 ## Zygote Fork进程为什么是用socket，为什么不用binder？
 - fork只能拷贝当前线程，不支持多线程的fork
 - 不建议在多线程环境使用Fork，而Binder是多线程的。
 怕父进程binder线程有锁，然后子进程的主线程一直在等其子线程(从父进程拷贝过来的子进程)的资源，但是其实父进程的子进程并没有被拷贝过来，造成死锁，所以fork不允许存在多线程。而非常巧的是Binder通讯偏偏就是多线程，所以干脆父进程（Zgote）这个时候就不使用binder线程
 > 互斥锁是导致无法在多线程环境使用Fork的根本原因，大部分系统中，锁的实现基本是用户态，并非内核态（用户态更加高效）。假设在fork之前，一个线程对某个锁进行lock操作，另一个线程进行fork子进程，会导致持有锁的子线程消失了，那这个锁就会永久锁定，假如另一个线程获取该锁，就会导致死锁了。
+
+## 如何传输一张大的Bitmap？ashmem匿名内存 
+用户通过mmap得到的offset地址当
+被用户首次访问时会因为缺页而导致异常函数shmem_fault被执行,这样用户访问的offset对应的物理内存页将被动态申请,
+ashmem的表现就像Heap堆一样,所以使用ashmem分配的内存,不像malloc,calloc之类,物理内存立即分配,
+ashmem只有当用户访问offset地址对应的物理页时,相应的内存物理页才被缺页异常处理,进而为offset虚拟地址申请和映射实体
+物理内存页,带来的直接好处就是,应用程序可以申请很大的内存,而应用程序最终实际占用的物理内存数量,会根据
+
+## SharedPreferences 缺点？用mmkv代替其优点是什么
+[SharedPreferences 是线程安全的吗？它的 commit 和 apply 方法有什么区别？](https://github.com/moosphan/android-daily-interview/issues/15)
+1. IO瓶颈。读写都要从内存写入到文件中。xml文件形式存储在本地
+  >	1、Editor的commit方法，每次执行时同步写入磁盘。
+  >	2、Editor的apply方法，每次执行时在单线程池中加入写入磁盘Task，异步写入。
+  > apply没有返回值。使用apply方法可以极大的提高性能。多个写入操作可以合并为一个commit/apply，将多个写入操作合并后也能提高IO性能。
+2. 读写操作的锁均是针对SP实例对象的。将数据拆分到不同的sp文件中，降低单文件访问频率，多文件均摊访问，以减少锁耗时。
+  > 在get操作时，会锁定SharedPreferences对象，互斥其他操作，而当put，commit时，则会锁定Editor对象，使用写入锁进行互斥
+3. sp并不支持跨进程，因为它不能保证更新本地数据后被另一个进程所知道。
+
+> - SharedPreferences是线程安全的，它的内部实现使用了大量synchronized关键字；SharedPreferences不是进程安全的
+> 第一次调用getSharedPreferences会加载磁盘 xml 文件（这个加载过程是异步的，通过new Thread来执行，所以并不会在构造SharedPreferences的时候阻塞线程，但是会阻塞getXxx/putXxx/remove/clear等调用）
+> 如果第一次调用getSharedPreferences时还没从磁盘加载完毕就马上调用getXxx/putXxx，那么getXxx/putXxx操作会阻塞，直到从磁盘加载数据完成后才返回
+> 所有的getXxx都是从内存中取的数据，数据来源于SharedPreferences.mMap
+> apply同步回写（commitToMemory()）内存SharedPreferences.mMap，然后把异步回写磁盘的任务放到一个单线程的线程池队列中等待调度。apply不需要等待写入磁盘完成，而是马上返回
+> commit同步回写（commitToMemory()）内存SharedPreferences.mMap，然后如果mDiskWritesInFlight（此时需要将数据写入磁盘，但还未处理或未处理完成的次数）的值等于1，那么直接在调用commit的线程执行回写磁盘的操作，否则把异步回写磁盘的任务放到一个单线程的线程池队列中等待调度。commit会阻塞调用线程，知道写入磁盘完成才返回
+MODE_MULTI_PROCESS是在每次getSharedPreferences时检查磁盘上配置文件上次修改时间和文件大小，一旦所有修改则会重新从磁盘加载文件，所以并不能保证多进程数据的实时同步
+
+### mmkv优点
+1. 通过 `mmap` 内存映射文件，提供一段可供随时写入的内存块。由操作系统负责将内存回写到文件（缺页中断回调），不必担心 crash 导致数据丢失
+2. 多进程访问，
+3. `Ashmem` 匿名共享内存，发现它在进程退出后就会消失，不会落地到文件上
+4. 有数据加密和CRC校验
+2. 使用protobuf压缩
+3. 增量写入。直接 append 到内存末尾，最新的数据在最后。
+4. 文件重整。以内存 pagesize 为单位申请空间，在空间用尽之前都是 append 模式；当 append 到文件末尾时，进行文件重整、key 排重
+
+### mmkv多进程如何锁的
+1. 通过校验文件,在读取数据时,来做校验,就实现了多个进程的数据同步
+2. 使用flock文件锁。但是文件锁不支持递归，所以需要自己维护计数和锁升级降级[MMKV for Android 多进程设计与实现](https://github.com/Tencent/MMKV/wiki/android_ipc)
+
+## 如何进程传输一张大图或者复用大图？Ashmem匿名共享内存，MemoryFile用过吗？SharedMemory呢？
+1. Java层Android也提供了一个名为MemoryFile的类提供方便使用匿名共享内存
+2. 实际上匿名共享内存创建出来也是一个文件，不过因为是在tmpfs临时文件系统才叫做匿名的
+3. 共享了一个文件描述符。对映射的区域进行读写，换句话说就是对共享内存这段地址区域直接进行读写，没有经过write，read的系统调用
+4. Ashmem这个区域的内存并不属于Java Heap,也不属于Native Heap。可以自动释放物理内存 `pin` & `unpin`
+> Fresco5.0以下使用Ashmem匿名共享内存来复用Bitmap
+Ashmem匿名共享内存使用的步骤可以分为4步：[Android 重学系列 Ashmem匿名共享内存](https://www.jianshu.com/p/6a8513fdb792)
+1. open /dev/ashmem驱动连通ashmem驱动。
+2. ioctl 发送ASHMEM_SET_NAME命令为该ashmem创建名字。
+3. ioctl 发送ASHMEM_SET_SIZE命令为ashmem设置大小
+4. mmap 做内存映射。
+5. 对该文件描述符进行读写即可。 
+628012
+
+##  多进程的好处
+1. Android系统对每个应用进程的内存占用是有限制的，而且占用内存越大的进程，通常被系统杀死的可能性越大。让一个组件运行在单独的进程中，可以减少主进程所占用的内存，降低被系统杀死的概率.
+2）如果子进程因为某种原因崩溃了，不会直接导致主程序的崩溃，可以降低我们程序的崩溃率。
+3）即使主进程退出了，我们的子进程仍然可以继续工作，假设子进程是推送服务，在主进程退出的情况下，仍然能够保证用户可以收到推送消息
+ 
 
 ## 说说组件化和插件化， 技术原理
 APT在编译的开始阶段对java文件进行操作，而像AscpectJ、ASM等则是在java文件编译为字节码文件后
@@ -349,12 +418,41 @@ CGLIB通过继承的方式进行代理，无论目标对象有没有实现接口
 ## Binder怎么学
 
 1. [为什么Binder的通信只进行了一次拷贝](https://mubu.com/doc/explore/21079) ：
-	1. 基于 `mmap` 。`Client`与 `Server` 处于不同进程有着不同的虚拟地址规则，所以无法直接通信。一个页框可以映射给多个页，那么就可以将一块物理内存分别与 Client 和 Server 的虚拟内存块进行映射。映射的虚拟内存块大小将近 1M (1M-8K)，所以 IPC 通信传输的数据量也被限制为此值
+	1. 基于 `mmap` 。`Client`与 `Server` 处于不同进程有着不同的虚拟地址规则，所以无法直接通信。一个页框可以映射给多个页，那么就可以将一块物理内存分别与 Client 和 Server 的虚拟内存块进行映射。映射的虚拟内存块大小将近 1M (1M-8K = 1016K)，所以 IPC 通信传输的数据量也被限制为此值
 		> —— 摘自[谈谈你对 binder 的理解？](https://zhuanlan.zhihu.com/p/143324649)
 	2. 通过 `copy_from_user` 将数据从用户空间拷贝到内核空间，通过 `copy_to_user` 将数据从内核空间拷贝到用户空间。一般的 IPC 方式需要分别调用这两个函数，数据就拷贝了两次，而 binder 将内核空间与目标用户空间进行了 `mmap`，只需调 `copy_from_user` 拷贝一次即可。
 		
 2. [聊聊怎样学习Binder](https://cloud.tencent.com/developer/article/1698142)内有c++代码简单传输的过程
 
+### binder每次传输大小有限制吗？
+- 限制了大小为1M-2页(1页=4k) = 1024K - 8 K = 1016k
+- 因此要传输图像数据这个大小根本不够。
+- 加上Binder内部有对每一个Binder内核缓冲区有自己的调度算法，没办法满足以最快的速度传输到SF进程中。
+> 所以Android选择使用共享内存的方式传递数据，也就是Ashmem匿名内存。 
+```C
+#define BINDER_VM_SIZE ((1 * 1024 * 1024) - sysconf(_SC_PAGE_SIZE) * 2) 
+ProcessState::ProcessState(const char *driver)
+    : mDriverName(String8(driver))
+    , mDriverFD(open_driver(driver))
+    , mVMStart(MAP_FAILED)
+    , mThreadCountLock(PTHREAD_MUTEX_INITIALIZER)
+    , mThreadCountDecrement(PTHREAD_COND_INITIALIZER)
+    , mExecutingThreadsCount(0)
+    , mMaxThreads(DEFAULT_MAX_BINDER_THREADS)
+    , mStarvationStartTimeMs(0)
+    , mManagesContexts(false)
+    , mBinderContextCheckFunc(NULL)
+    , mBinderContextUserData(NULL)
+    , mThreadPoolStarted(false)
+    , mThreadPoolSeq(1)
+{
+    if (mDriverFD >= 0) {
+        // mmap the binder, providing a chunk of virtual address space to receive transactions.
+        mVMStart = mmap(0, BINDER_VM_SIZE, PROT_READ, MAP_PRIVATE | MAP_NORESERVE, mDriverFD, 0);
+...
+    }
+}
+```
 
 ### 为什么 binder 驱动要运行在内核空间？可以移到用户空间吗？
 > [说说你对 binder 驱动的了解？](https://zhuanlan.zhihu.com/p/152237289)
@@ -598,6 +696,10 @@ bitmapPool.trimMemory(level);
 arrayPool.trimMemory(level);
 ```
 
+### Parcelable和Serializable区别
+Parcelable的性能比Serializable好，在内存开销方面较小，所以在内存间数据传输时推荐使用Parcelable，如activity间传输数据，而Serializable可将数据持久化方便保存，所以在需要保存或网络传输数据时选择Serializable，因为android不同版本Parcelable可能不同，所以不推荐使用Parcelable进行数据持久化。
+
+Serializable序列化不保存静态变量，可以使用Transient关键字对部分字段不进行序列化，也可以覆盖writeObject、readObject方法以实现序列化过程自定义。
 
 ### 两个Activity切换生命周期是怎样的？
  [两个Activity切换生命周期是怎样的？](https://blog.csdn.net/lei396601057/article/details/109272301)
@@ -767,3 +869,21 @@ lbs 返回服务器 ip 而非域名
 
 
 ```
+## singleTask
+
+`singleTask`: 该Activity全局唯一。相同的`taskAffnity`属性在一个task栈里，多个相同的`taskAffnity`的栈只会展示一个`Activity`在最近打开的应用里。如果栈里存在有旧Activity，则不会调用OnCreate，而是OnNewIntent，且会清除到栈顶的所有 Activity。 
+
+`singleInstance`: 一个task里只有这一个Activity。再在`singleInstance` 里打开新Activity，会将task 栈拿过来覆盖在上面 
+
+`singleTop` 如果是当前顶部的第一个，则复用
+> 当前singleTop模式的act正处于栈顶时，跳转该act会调用onNewintent方法且不会重新创建该act实例，只会重新调用该实例，生命周期为：
+> - onPause->onNewIntent->onResume
+
+## 在Activity的oncreate方法中调用finish都执行哪些生命周期 
+onCreate()->onDestory()
+
+## fragment生命周期
+![fragment生命周期](https://img-blog.csdnimg.cn/20190102215232426.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3l6X2NmbQ==,size_16,color_FFFFFF,t_70)
+
+## kotlin协程原理
+编译器帮忙实现了状态机，根据不同状态调用不同回调
