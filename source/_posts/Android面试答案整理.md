@@ -283,8 +283,25 @@ DEX分包是为了解决65536方法限制，系统在应用打包APK阶段，会
 
 ## 点击屏幕后触发的流程讲一下，从硬件开始说。
 
-## 
+## RecyclerView缓存 ⭐
+
+## 事件分发
+### 点击一个按钮后一直按住，同时挪开屏幕
 [事件分发三连问：事件是如何从屏幕点击最终到达 Activity 的？CANCEL 事件什么时候会触发？如何解决滑动冲突？](https://blog.csdn.net/Androiddddd/article/details/108804170)
+
+- 只要clickable和longClickable有一个为真，那么onTouchEvent就返回true。哪怕一个View是disable状态的 
+  > ——[Android事件分发机制面试题](https://www.cnblogs.com/androidxufeng/p/12795620.html)
+```JAVA
+// 经典的责任链模式
+bool dispatchTouchEvent(MotionEvent ev){
+	bool consume = false;
+	if(onInterceptTouchEvent(ev)){
+		consume = onTouchEvent(ev);
+	} else {
+		consume = child.dispatchTouchEvent(ev);
+	}
+}
+```
 
 ## ActivityThread是UI线程吗，它并没有继承自Thread？ActivityThread 中的 H 用来干嘛的
 > 当Zygote启动时，会分裂出system_server并进行不断地ipc轮询,system_server会创建AMS等服务。当你在桌面点击一个app图标时，并且这个app在内存中是无实例的。ams会通知system_server,由system_server通知Zygote去fork出子进程并执行ActivityThread的main方法。main方法的调用是在子进程的主线程中。
@@ -670,6 +687,9 @@ okhttp记录了每个socket流使用情况，同时设定了每个socket能同�
 
 ## Glide是如何监听周期的？
 
+### Glide 加载 Gif 的原理
+就是将 Gif 解码成多张图片进行无限轮播，每帧切换都是一次图片加载请求，再加载到新的一帧数据之后会对旧的一帧数据进行清除，然后再继续下一帧数据的加载请求，以此类推，使用 Handler 发送消息实现循环播放
+
 #### 监听生命周期
 
 用了一个没有UI的Fragment（名为RequestManagerFragment）入到传入的非Application的Context的FragmentManager中
@@ -885,5 +905,34 @@ onCreate()->onDestory()
 ## fragment生命周期
 ![fragment生命周期](https://img-blog.csdnimg.cn/20190102215232426.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3l6X2NmbQ==,size_16,color_FFFFFF,t_70)
 
+<<<<<<< HEAD
 ## kotlin协程原理
 编译器帮忙实现了状态机，根据不同状态调用不同回调
+=======
+## kotlin协程原理和suspend原理
+suspend原理：编译器帮忙实现了状态机，根据不同状态调用不同回调
+
+## LruCache与DiskLruCache缓存详解
+1. LruCache就是通过设置`LinkedHanhMap`的链表顺序为Lru来实现Lru缓存的
+2. 经常被操作的都放在链表的尾端，表头对象肯定就是不常用的
+3. 线程安全的
+
+## Databinding 理解
+-  `ActivityMainBindlmpl.java` 是通过APT技术自己生成出来的。
+  > `APT`(`Annotation Processing Tool`)即注解处理：在编译期，通过注解生成.java文件
+- 双向绑定，没有用反射
+  > `mRebindRunnable` 最终会执行到 `executeBindings()` 方法。把从JavaBean属性中读出来的值设置到View上，实现了Model到View更新；为View控件设置监听(例如色图setTextWatcher)，以改变对应JavaBean的属性的值，实现了View到Model的更新。
+- 在ViewDataBinding的静态代码块，会有一个全局的监听`OnAttachStateChangeListener`，用来通知数据更新：每当View改变的时候，这个监听中的回调方法就会被执行，通过一个Handler去post `mRebindRunnable` ，从而更新Model
+- 需要额外消耗内存的地方
+  > - 定义了一个**额外的数组**来记录这些控件
+  > - 每个Activity都会有一个Runable，10个Activity就会创建10个Runable
+- runnable执行方法异同
+```Java
+	if (USE_CHOREOGRAPHER) { // > sdkVersion16
+		mChoreographer.postFrameCallback(mFrameCallback);
+	} else {
+		mUIThreadHandler.post(mRebindRunnable);
+	}
+```
+## onResume中Handler.post(Runnable)为什么获取不到宽高？
+>>>>>>> pc
