@@ -34,12 +34,31 @@ categories: 面试
 
 ## 如何计算冷启动时间？冷启动的优化是什么？
 
-## 事件分发
+## 音频文件会选择怎样的压缩方式？zlib？
 
+## 媒体文件断点续传是什么formData字段？你们的录音文件是一帧一帧的流传输吗？录音文件可以停止再录吗
+
+## View的事件分发
 1. [Android事件分发机制 详解攻略，您值得拥有](https://blog.csdn.net/carson_ho/article/details/54136311)
+ 
+
+ ## Android匿名内存
+ 同时多进程间通过mmap共享文件数据的时候，仅需要一块物理内存就够了。
+​ Android中使用mmap，可以通过RandomAccessFile与MappedByteBuffer来配合。
+通过randomAccessFile.getChannel().map获取到MappedByteBuffer。然后调用ByteBuffer的put方法添加数据。
+## SharedPreferences是跨进程安全的吗？工程中用什么替代？
+可以mmkv，ContentProvider也更适合跨进程共
+> SharedPreferences 的 N 宗罪：
+> 1. 跨进程不安全
+> 2. 加载缓慢：异步加载，但是异步加载线程没有设置优先级，如果这时候主线程读取数据需要等待加载线程执行完毕 (也就是主线程等待低优先级线程锁的问题)
+> 3. 全量写入：无论是 commit 还是 apply，即使改动一个条目，也会把全部内容写到文件
+> 4. 卡顿：异步落盘机制在应用崩溃时会导致数据丢失
+
+
+## ContentProvider是线程安全的吗？SharedPreferences是线程安全的吗？
+
 
 ## 如何减少卡顿？刷新原理
-
 ![img](https://user-gold-cdn.xitu.io/2020/3/27/17117aa6eb5b454e?imageView2/0/w/1280/h/960/format/webp/ignore-error/1)
 
 
@@ -75,14 +94,9 @@ categories: 面试
 	```
   > 默认会忽略 static 变量以及被声明为 transient 的字段
 
-## SharedPreferences是跨进程安全的吗？工程中用什么替代？
-可以mmkv，ContentProvider也更适合跨进程共享
-
-
 ## ContentProvider 的原理是什么？为啥工程选用ContentProvider而不是AIDL来IPC
 - 利用了 Android 的 Binder 和匿名共享内存机制。
 - 通过 Binder 传递 CursorWindow 对象内部的匿名共享内存的文件描述符。这样在跨进程传输中，结果数据并不需要跨进程传输，而是在不同进程中通过传输的匿名共享内存文件描述符来操作同一块匿名内存，这样来实现不同进程访问相同数据的目的
-
 
 使用上需要注意：
 - 对于 `client` 端就是通过 `context.getContentResolver() `来获取到一个 `ContentResolver` 对象，然后调用对象的 `query`， `delete` ，`update` 等方法
