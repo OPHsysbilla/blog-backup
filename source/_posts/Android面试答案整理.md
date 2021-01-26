@@ -36,11 +36,26 @@ categories: 面试
 
 ## 音频文件会选择怎样的压缩方式？zlib？
 
-## 媒体文件断点续传是什么formData字段？你们的录音文件是一帧一帧的流传输吗？录音文件可以停止再录吗
+## 有了解音频底下audioPlayer的原理吗
 
+## 上传媒体文件断点续传是什么formData字段？你们的录音文件是一帧一帧的流传输吗？录音文件可以停止再录吗
+ 
 ## View的事件分发
 1. [Android事件分发机制 详解攻略，您值得拥有](https://blog.csdn.net/carson_ho/article/details/54136311)
- 
+
+## Activity启动后View何时开始绘制（onCreate中还是onResume之后？）
+- 由于onCreate会先于handleResumeActivity执行，我们在onCreate中调用了setContentView，也只是生成DecorView并给这个DecorView的内容设置了布局而已，此时还并没有把这个DecorView添加到Window中，同样，WMS中也还没有这个Window，所以此时并不能做任何事情（绘制、接收点击事件等），虽然调用了requestLayout和invalidate，并不会真正触发布局和重绘（因为还没有与ViewRootImpl进行绑定）
+- Activity与Window产生联系，是在调用activity#attach方法中，生成了一个PhoneWindow，并把这个activity对象自身，设置给了Window的Callback回调（Activity实现了Window的Callback接口）
+- Window与WindowManagerService产生联系，是在handleResumeActivity中，先执行了onResume方法，通过调用WindowManagerImpl#addView方法将这个Activity对应的DecorView添加到了这个Window中，addView方法是一个IPC操作，将这个Window也添加到了WindowManagerService中；
+- ViewRootImpl与Window产生联系，是在WindowManagerImpl#addView方法中，这个过程中会new一个ViewRootImpl与DecorView相对应，保存在WindowManagerGloable中；
+- 总的来说，就是setContentView生成了DecorView及其视图，在onResume之后才把这个视图添加进了Window和WMS中，具备了交互能力；
+
+## 【异常处理】Activity和进程发生异常时的自动恢复逻辑
+[【异常处理】Activity和进程发生异常时的自动恢复逻辑](https://blog.csdn.net/u013718730/article/details/102021431)
+
+## Activity渲染完成第一帧时机
+[ Activity渲染完成第一帧时机](https://blog.csdn.net/brycegao321/article/details/101147431)
+
 
  ## Android匿名内存
  同时多进程间通过mmap共享文件数据的时候，仅需要一块物理内存就够了。
