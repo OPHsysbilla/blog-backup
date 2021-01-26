@@ -136,6 +136,7 @@ categories: 面试
 View 的 requestLayout 和 ViewRootImpl##setView 最终都会调用 ViewRootImpl 的 requestLayout 方法，然后通过 scheduleTraversals 方法向 Choreographer 提交一个绘制任务，然后再通过 DisplayEventReceiver 向底层请求 vsync 垂直同步信号，当 vsync 信号来的时候，会通过 JNI 回调回来，在通过 Handler 往消息队列 post 一个异步任务，最终是 ViewRootImpl 去执行绘制任务，最后调用 performTraversals 方法，完成绘制。
 ![屏幕刷新的原理](https://upload-images.jianshu.io/upload_images/24142630-409cdaf1c5111e47?imageMogr2/auto-orient/strip|imageView2/2/w/1089/format/webp)
 [应用流畅度(FPS)监控](https://github.com/SusionSuc/AdvancedAndroid/blob/master/performance/rabbit/%E5%BA%94%E7%94%A8%E6%B5%81%E7%95%85%E5%BA%A6(FPS)%E7%9B%91%E6%8E%A7.md)
+[面试官又来了：你的app卡顿过吗？](https://juejin.cn/post/6844903949560971277)
 ### 卡顿原因：
 现在的App每秒中最多能绘制60帧，1000ms/60帧=16.67ms/帧，也就是说对图像绘制的要求是平均每帧的绘制时间为16.67ms
 - 主线程有其它耗时操作，导致doFrame 没有机会在 vsync 信号发出之后 16 毫秒内调用；
@@ -221,8 +222,25 @@ Apk的资源是通过AssetManager.addAssetPath方法来完成加载，那么我�
 ## 热修复
 MultiDex将本地加载的dex文件插入到DexPathList中的dexElements中，后续程序运行时就会自动到该变量中去查找新的类，这就是该篇讲的热修复的原理。
 
+## 混淆proguard
+proguard主要的目的是混淆代码，保护应用源代码。次要的功能还有移除无用类等，优化字节码，缩小包体积。
+
+压缩(Shrink)：检测并移除代码中无用的类、字段、方法和特性(Attribute)
+优化(Optimize)：字节码进行优化，移除无用的指令。
+混淆(Obfuscate)：使用a、b、c、d这样简短而无意义的名称，对垒、字段和方法进行重命名。
+预检测(Preveirfy)：在Java平台对处理后的代码进行预检测，确保加载class文件是可执行的。
+
+
 ## 热修复资源替换
 资源注入：资源的动态加载则相对简单。主要是参考Instant Run，通过反射调用AssetsManager的addAssets方法，将增量资源包加载到内存中来，得到新的Resources对象，然后替换掉ActivityThread等所有持有Resources的地方即可。这也是大部分热修复框架中的基本思路。
+
+## 如何识别重复资源？
+使用AndResGuard可以更加缩减包体积。
+识别重复资源很简单，只要计算一下md5就行了。
+并且我们在resources.arsc中可以拿到所有的资源，那么我们就可以对resources.arsc中的所有资源进行处理，根据md5进行去重，把使用了相同资源的资源id都指向同一个资源，把多余的资源删除掉，再回写入resources.arsc就好了
+
+## 65536的问题
+一个DEX文件中的method个数采用使用原生类型short来索引文件的方法，也就是2个字节共计最多表达65536个method。所以当method数过多的时候，就必须使用multidex
 
 ### Dex分包：MultiDex
 [Android Dex分包之旅](http://yydcdut.com/2016/03/20/split-dex/index.html)含有 `65536` \  `LinearAlloc` 等问题的解决方式
@@ -283,8 +301,45 @@ DEX分包是为了解决65536方法限制，系统在应用打包APK阶段，会
 
 ## 点击屏幕后触发的流程讲一下，从硬件开始说。
 
-## RecyclerView缓存 ⭐
+## view的绘制流程，为什么会多次调用onMeasure
+- onResume(Activity)
+- onPostResume(Activity)
+- onAttachedToWindow(View)
+- onMeasure(View)
+- onMeasure(View)
+- onLayout(View)
+- onSizeChanged(View)
+- onMeasure(View)
+- onLayout(View)
+- onDraw(View)
 
+## 如何确定在主线程
+`Looper.getMainLooper().getThread()`得到主线程， 与当前线程做比较
+
+## RecyclerView缓存 ⭐
+在RecyclerView中，并不是每次绘制表项，都会重新创建ViewHolder对象，也不是每次都会重新绑定ViewHolder数据。
+- RecyclerView 通过Recycler获得下一个待绘制表项。Recycler有4个层次用于缓存ViewHolder对象，优先级从高到底依次为
+  1. ArrayList<ViewHolder> mAttachedScrap
+    > - 存放的是dettach掉的视图
+    > - 从mAttachedScrap 中复用的ViewHolder不需要重新创建也不需要重新绑定数据
+	> 用于布局过程中屏幕可见表项的回收和复用。
+	> - 先 detach 并 缓存表项到 scrap 结构中，然后紧接着又在填充表项时从中取出。因为 RecyclerView 要做表项动画，为了确定动画的种类和起终点，需要比对动画前和动画后，就得布局两次，分别是预布局和后布局（布局即是往列表中填充表项），
+
+  2. ArrayList<ViewHolder>  mChangedScrap
+    > - 存放的是dettach掉的视图
+    > - 和上边的mAttachedScrap是一样的，唯一不同的从名字也可以看出来，它存放的是发生了变化的ViewHolder，要重新走Adapter的绑定方法的
+  3. ArrayList<ViewHolder> mCachedViews
+    > - 复用的ViewHolder，只能复用于指定位置(position)的表项。
+	> - 只有“列表回滚”这一种场景（刚滚出屏幕的表项再次进入屏幕），才有可能命中该缓存。该缓存存放在默认大小为 2 的ArrayList中
+  4. ViewCacheExtension mViewCacheExtension
+    > 自定义缓存
+  5. RecycledViewPool mRecyclerPool
+     > - 复用的ViewHolder需要重新绑定数据。
+	 > - 对ViewHolder按viewType分类存储（通过SparseArray），每个viewType相同的包含默认大小为5的ArrayList来村ViewHolder。
+  如果四层缓存都未命中，则重新创建并绑定ViewHolder对象。
+     > - 总是先回收到mCachedViews，当它放不下的时候，按照先进先出原则将最先进入的ViewHolder存入回收池
+  6.  ArrayList<ViewHolder> mHiddenViews
+     > - 是个缓存被隐藏的ViewHolder的ArrayList
 ## 事件分发
 ### 点击一个按钮后一直按住，同时挪开屏幕
 [事件分发三连问：事件是如何从屏幕点击最终到达 Activity 的？CANCEL 事件什么时候会触发？如何解决滑动冲突？](https://blog.csdn.net/Androiddddd/article/details/108804170)
