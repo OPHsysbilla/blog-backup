@@ -54,9 +54,10 @@ categories: 面试
 > 3. 全量写入：无论是 commit 还是 apply，即使改动一个条目，也会把全部内容写到文件
 > 4. 卡顿：异步落盘机制在应用崩溃时会导致数据丢失
 
-
+EventBus、BroadCast和Handler-优缺点比较
 ## ContentProvider是线程安全的吗？SharedPreferences是线程安全的吗？
-
+- SharedPreferences是线程安全的，不是进程安全
+- ContentProvider不是线程安全的，是进程安全的
 
 ## 如何减少卡顿？刷新原理
 ![img](https://user-gold-cdn.xitu.io/2020/3/27/17117aa6eb5b454e?imageView2/0/w/1280/h/960/format/webp/ignore-error/1)
@@ -905,10 +906,6 @@ onCreate()->onDestory()
 ## fragment生命周期
 ![fragment生命周期](https://img-blog.csdnimg.cn/20190102215232426.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3l6X2NmbQ==,size_16,color_FFFFFF,t_70)
 
-<<<<<<< HEAD
-## kotlin协程原理
-编译器帮忙实现了状态机，根据不同状态调用不同回调
-=======
 ## kotlin协程原理和suspend原理
 suspend原理：编译器帮忙实现了状态机，根据不同状态调用不同回调
 
@@ -935,4 +932,3 @@ suspend原理：编译器帮忙实现了状态机，根据不同状态调用不�
 	}
 ```
 ## onResume中Handler.post(Runnable)为什么获取不到宽高？
->>>>>>> pc
