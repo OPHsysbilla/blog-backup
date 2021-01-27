@@ -8,6 +8,14 @@ tags:
 ---
 
 
+## Java引用类型原理剖析：WeakRefrence、SoftReference
+
+## GC的时候怎么判断什么对象需要被回收？哪些是GC Roots可达结点
+
+## 如何检测内存泄漏
+
+
+
 ## ThreadLocal是干嘛的，作用是什么 
 <!--more-->
 - 每个线程Thread维护了ThreadLocalMap这么一个Map变量，保证线程隔离且有唯一的ThreadLocal
@@ -32,6 +40,13 @@ synchronizedList是使用了同步代码块，vector是使用了同步方法，�
   > 获取所有该注解里的参数，可以达成生成新类的目的
 - 插桩。自定义Gradle插件，利用Transform修改class文件
 - 反射，运行时动态获取注解信息 getAnnotions
+```C++
+SPI：策略模式，可以通过配置文件动态加载。放到resources/META-INF/services下，可以用@AutoService注解代替
+1、定义接口和接口实现类
+2、创建resources/META-INF/services目录
+3、在该目录下创建一个文件，文件名为接口名（带包全名），内容为接口实现类的带包全名
+4、在代码中通过ServiceLoader动态加载并且调用实现类的内部方法。
+```
 
 > Retrofit使用到了注解。
 > 1. Retrofit使用动态代理模式实现定义的网络请求接口。
@@ -43,6 +58,7 @@ synchronizedList是使用了同步代码块，vector是使用了同步方法，�
 		Call<ResponseBody> searchRepoInfo(@Path("name") String name);
 	}
 ```
+
 
 ## Java IO
  Java中字符是采用Unicode标准，一个字符是16位
@@ -224,7 +240,6 @@ JVM退出时，不必关心守护线程是否已结束，所以final可能不会
 2. 类比[处理器 - 缓存 - 内存]的三级层次，[线程 - 工作内存 - 主内存]。其中线程互相不可见彼此的工作内存，并通过主内存来共享交流。
 3. volatile关键字的作用是：1、防止指令重新排序；2、保证每个线程在拿到它的那一瞬间前被刷新，拿到的是主内存中的最新值。但不能说volatile修饰了变量后就实现了线程安全：例如i++，i++这个操作本身不是原子性的。线程在拿到i时是可以保证是最新值，但是在之后加一再写回去的这两步中，其他线程可能已经修改了主内存里i的值，最终导致最后写回去的值覆盖了其他线程的操作。
 4. Java中锁的分类有自旋锁、可重入锁、阻塞锁等等分类，其中能够造成线程卡死的锁，只有阻塞锁。
-5. 写时复制的ConcurrentHashMap的[clear方法是弱一致性的](http://ifeve.com/concurrenthashmap-weakly-consistent/)，因为是不同桶结点在清理时临时加锁，所以已经被清理过的段可能会被添加新内容很正常。故现象为clear完后，里面有其他地方新加的数据。原理[HashMap? ConcurrentHashMap? 相信看完这篇没人能难住你！](https://crossoverjie.top/2018/07/23/java-senior/ConcurrentHashMap/)和[Java 8 ConcurrentHashMap 源码解读](https://swenfang.github.io/2018/06/03/Java%208%20ConcurrentHashMap%20%E6%BA%90%E7%A0%81%E8%A7%A3%E8%AF%BB/)
 
 ## 1.接口与抽象类区别？
 ## 2. java中的异常有哪⼏几类，分别怎么使用？
@@ -318,6 +333,7 @@ https://blog.csdn.net/qq_36520235/article/details/82417949?utm_medium=distribute
 > 2. 同时length永远为**2的幂次**，所以`(length - 1)`是一群低位为1的mask。
 ## 39. ConcurrentHashMap在JDK1.8的改动是什么？
 - 去掉了Segment（继承ReentrantLock，只锁部分table）
+  > 当对HashEntry数组的数据进行修改时，必须首先获得它对应的Segment锁
 - 改为用synchronizied只锁住table，即每个红黑树/链表头，减少锁粒度
 
 > 1. Segment下，每个节点都需要通过继承AQS来获得同步支持。但并不是每个节点都需要获得同步支持的，只有链表的头节点（红黑树的根节点）需要同步，这无疑带来了巨大内存浪费 
@@ -325,10 +341,14 @@ https://blog.csdn.net/qq_36520235/article/details/82417949?utm_medium=distribute
 > 
 > 2. Segment数组一旦初始化以后，是不可以扩容的
 
+
+## ConcurrentHashMap是怎样计数和删除的
 - 比如[谈谈ConcurrentHashMap1.7和1.8的不同实现](https://www.jianshu.com/p/e694f1e868ec)中有说到： **size()计算方式不同**
    1. JDK1.8中使用一个volatile类型的变量baseCount记录元素的个数，当插入新数据或则删除数据时更新baseCount。
    2. > 实现比1.7简单多，因为元素个数保存baseCount中，部分元素的变化个数保存在CounterCell数组中
    3. JDK 1.7的计算方式是先不加锁，如果多次计算结果相同，则说明无修改；如果多次计算结果都不同，则给每个Segment进行加锁，再计算一次元素的个数；但是**已经计算过的Segment可能会被修改**
+
+- 写时复制的ConcurrentHashMap的[clear方法是弱一致性的](http://ifeve.com/concurrenthashmap-weakly-consistent/)，因为是不同桶结点在清理时临时加锁，所以已经被清理过的段可能会被添加新内容很正常。故现象为clear完后，里面有其他地方新加的数据。原理[HashMap? ConcurrentHashMap? 相信看完这篇没人能难住你！](https://crossoverjie.top/2018/07/23/java-senior/ConcurrentHashMap/)和[Java 8 ConcurrentHashMap 源码解读](https://swenfang.github.io/2018/06/03/Java%208%20ConcurrentHashMap%20%E6%BA%90%E7%A0%81%E8%A7%A3%E8%AF%BB/)
 
 ## 40. synchronizied是可重入锁吗？和ReentrantLock区别是什么？
 > ReentrantLock的锁实现是用aqs,会占用额外空间.
@@ -490,3 +510,10 @@ protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundE
 5. 高并发低延迟的场景，如何调整gc参数尽量降低gc停顿时间，针对队列处理机如何尽可能提高吞吐率等（特定场景的jvm优化实践或者优化）
 6. 解zgc高效的实现原理，了解Graalvm的特点（jvm最新技术）
 
+## Java的泛型是如何工作的 ? 什么是类型擦除 ?如何工作？
+好处： 类型安全，提供编译期间的类型检测
+
+1. 类型检查：在生成字节码之前提供类型检查
+2. 类型擦除：所有类型参数都用他们的限定类型替换，包括类、变量和方法（类型擦除）
+3. 如果类型擦除和多态性发生了冲突时，则在子类中生成桥方法解决
+4. 如果调用泛型方法的返回类型被擦除，则在调用该方法时插入强制类型转换

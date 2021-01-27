@@ -319,8 +319,9 @@ Handler的`dispatchMessage`函数里：
     }
 ```
 # 如何理解 HandlerThread？
-继承 `Thread`，根据`TLS`维护子线程的 `Looper`，在子线程`Looper#loop()`
-将 Thread、Handler、Looper 封装，便于开发者使用
+- 继承 `Thread`，根据`TLS`维护子线程的 `Looper`，在子线程`Looper#loop()`
+- 持有了`Handler`，开启了`Looper.prepare()`与`Looper.loop()`循环
+- 在 `IntentService` 后台任务执行时也直接持有了一个`HandlerThread`来挨个执行任务，并且`IntentService`全部执行任务完毕后会自动停止
 
 # 如何实现子线程等待主线程处理消息结束后，再继续执行？原理是什么？
 使用 `Handler` 的 `boolean runWithScissors(final Runnable r, long timeout)`

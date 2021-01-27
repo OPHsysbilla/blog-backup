@@ -27,20 +27,61 @@ categories: 面试
 ## AMS启动流程
 
 ## 预热webview；预加载离线包；
-## 点击屏幕后触发的流程讲一下，从硬件开始说。
 
 ## Xposed
 是干嘛的？
 
-## 如何计算冷启动时间？冷启动的优化是什么？
-
 ## 音频文件会选择怎样的压缩方式？zlib？
 
 ## 媒体文件断点续传是什么formData字段？你们的录音文件是一帧一帧的流传输吗？录音文件可以停止再录吗
+ 
+## 火焰图的原理是什么？systrace和traceView的原理是怎样的呢？他们计算函数耗时的采样率是怎样的？
+> `Rabbit`计算卡顿的时候就是周期性的采集主线程堆栈。因为：
+> 1. 获取主线程的堆栈可能会导致主线程卡顿
+> 2. 卡顿发生时，获取到前面卡顿时的堆栈可能不准
+> 每隔16.67ms在异步线程获取一下主线程的堆栈然后保存起来，在卡顿发生时，把这些周期性采集的堆栈当做卡顿时的堆栈。这种方法可以抓住大部分卡顿现场,不过也会获取一些无用的堆栈信息。
 
+
+## 有用过MVVM吗？ RecyclerView的adapter是持有的源数据源吗，放在presenter为什么不好，RecyclerView的复用过程
+
+## 为什么不能一边offsetTopAndBottom一边动画呢？会一直触发onLayout，为啥不能同时进行
+
+
+## 点击屏幕后触发的流程讲一下，从硬件开始说。
+1. 在 ViewRootImpl 里有一个 WindowInputEventReceiver 用来接受事件并进行分发。
+InputChannel 发送的事件最终都是通过 WindowInputEventReceiver 进行接受。
+WindowInputEventReceiver 是在 ViewRootImpl.setView 里面初始化的，setView 的调用是在 ActivityThread.handleResumeActivity -> WindowManagerGlobal.addView
+2. FrameDisplayEventReceiver继承自DisplayEventReceiver接收底层的VSync信号开始处理UI过程。VSync信号由SurfaceFlinger实现并定时发送。FrameDisplayEventReceiver收到信号后，调用onVsync方法组织消息发送到主线程处理。这个消息主要内容就是run方法里面的doFrame了，这里mTimestampNanos是信号到来的时间参数。
+
+## 如何计算冷启动时间？冷启动的优化是什么？
+![启动app过程](https://img-blog.csdn.net/20180823215319329?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3FpYW41MjBhbw==/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70)
 ## View的事件分发
 1. [Android事件分发机制 详解攻略，您值得拥有](https://blog.csdn.net/carson_ho/article/details/54136311)
+
+## cancel事件什么时候触发
+ 1. View 收到 ACTION_DOWN 事件以后，上一个事件还没有结束（可能因为 APP 的切换、ANR 等导致系统扔掉了后续的事件），这个时候会先执行一次 ACTION_CANCEL
+ 2. 子 View 之前拦截了事件，但是后面父 View 重新拦截了事件，这个时候会给子 View 发送 ACTION_CANCEL 事件
+ > ——[事件分发三连问：事件是如何从屏幕点击最终到达 Activity 的？CANCEL 事件什么时候会触发？如何解决滑动冲突？](https://blog.csdn.net/Androiddddd/article/details/108804170)
+3. 针对多指POINTER_ID的情况是用一个链表保存的。[ViewGroup事件分发总结-TouchTarget](https://blog.csdn.net/dehang0/article/details/104317611)
  
+## View的绘制流程
+1. 每个Activity 的根布局都是 DecorView， DecorView 是继承自 Fragment，DecorView 的 mParent 是 ViewRootImpl 
+
+2. View 发起刷新的操作时，会层层通知到 ViewRootImpl 的 scheduleTraversals() 里去，然后这个方法会将遍历绘制 View 树的操作 performTraversals() 封装到 Runnable 里，传给 Choreographer，以当前的时间戳放进一个 mCallbackQueue 队列里，然后调用了 native 层的vsync信号
+   > onVsync() 是底层会回调的，可以理解成每隔 16.6ms 一个帧信号来的时候，底层就会回调这个方法，当然前提是我们得先注册
+3.  invalidate()，requestLayout()，等之类刷新界面的操作时，并不是马上就会执行这些刷新的操作，而是通过 ViewRootImpl 的 scheduleTraversals() 先向底层注册监听下一个屏幕刷新信号事件，然后等下一个屏幕刷新信号来的时候，才会去通过 performTraversals() 遍历绘制 View 树来执行这些刷新操作
+   > - 16.6ms内会过滤一帧内重复的刷新请求
+   > - 添加同步屏障的消息拦截同步消息的执行
+      > 1. 主线程的 Looper 会一直循环调用 MessageQueue 的 next() 来取出队头的 Message 执行， 当 next() 方法在取 Message 时发现队头是一个同步屏障的消息时，就会去遍历整个队列，只寻找设置了异步标志的消息
+	  > 2. 有找到异步消息，那么就取出这个异步消息来执行
+	  > 3. 没有找到异步消息就让 next() 方法陷入阻塞状态，主线程此时就是处于空闲状态的，也就是没在干任何事。直到这个同步屏障消息被移除出队列，否则主线程就一直不会去处理同步屏幕后面的同步消息。
+
+### 为什么会丢帧	
+- 一是遍历绘制 View 树计算屏幕数据的时间超过了 16.6ms
+- 二是主线程一直在处理其他耗时的消息，导致遍历绘制 View 树的工作迟迟不能开始，从而超过了 16.6 ms 底层切换下一帧画面的时机
+
+## 计算一个view的嵌套层级
+递归往上调用`getParent()`
 
  ## Android匿名内存
  同时多进程间通过mmap共享文件数据的时候，仅需要一块物理内存就够了。
@@ -143,6 +184,8 @@ View 的 requestLayout 和 ViewRootImpl##setView 最终都会调用 ViewRootImpl
 - 主线程有其它耗时操作，导致doFrame 没有机会在 vsync 信号发出之后 16 毫秒内调用；
 - 当前doFrame方法耗时，绘制太久，下一个 vsync 信号来的时候这一帧还没画完，造成掉帧。
 事实上比起每一帧的耗时稍长来说，跳帧（掉帧）才会更易被用户察觉。1s30帧可能没影响，但是这掉的一帧时间太长是会被看出来的
+
+
 ### 监控卡顿
 1. 基于主线程 `Looper` 的 Printer 分发消息的时间差值，监控每次 dispatchMessage 的执行耗时。
 	> 开源框架 `BlockCanary` 也是给 `Looper` 设置 `Printer` 来监控每个msg的操作时间的。当时耗时超过阈值，会开启一个独立线程查询此段时间内的堆栈、cpu、logcat、内存信息格式化到文件。
@@ -167,6 +210,11 @@ View 的 requestLayout 和 ViewRootImpl##setView 最终都会调用 ViewRootImpl
 3. 基于消息队列的卡顿监控并不准确，正在运行的函数有可能并不是真正耗时的函数
 4. 某个线程不断地获取主线程堆栈的代价是巨大的，它要暂停主线程的运行
     —— [Matrix Android TraceCanary Wiki](https://github.com/Tencent/matrix/wiki/Matrix-Android-TraceCanary)
+### 监控卡顿的第二种方法方案： Rabbit 
+在Choreographer.doFrame()回调中通过Handler向HandlerThread发送一个消息。
+在HandlerThread中采集主线程的堆栈并保存在map中(避免采集重复的堆栈信息)
+以固定的堆栈采集周期向HandlerThread继续发送堆栈采集的消息
+当Choreographer.doFrame()的frameCostNs超过了卡顿阈值时，就把在frameCostNs这个时间内采集到的堆栈作为卡顿现场
 
 ## 如何计算函数耗时？
 1. 在应用启动时，默认打开 Trace 功能（Debug.startMethodTracing），应用内所有函数在执行前后将会经过该函数（`dalvik` 上 `dvmMethodTraceAdd` 函数 或 `art` 上 `Trace::LogMethodTraceEvent` 函数）， 通过hack手段代理该函数，在每个执行方法前后进行打点记录。
@@ -314,10 +362,7 @@ DEX分包是为了解决65536方法限制，系统在应用打包APK阶段，会
 - onLayout(View)
 - onDraw(View)
 
-## 如何确定在主线程
-`Looper.getMainLooper().getThread()`得到主线程， 与当前线程做比较
-
-## RecyclerView缓存 ⭐
+## RecyclerView缓存有了解吗 ⭐
 在RecyclerView中，并不是每次绘制表项，都会重新创建ViewHolder对象，也不是每次都会重新绑定ViewHolder数据。
 - RecyclerView 通过Recycler获得下一个待绘制表项。Recycler有4个层次用于缓存ViewHolder对象，优先级从高到底依次为
   1. ArrayList<ViewHolder> mAttachedScrap
@@ -341,7 +386,16 @@ DEX分包是为了解决65536方法限制，系统在应用打包APK阶段，会
      > - 总是先回收到mCachedViews，当它放不下的时候，按照先进先出原则将最先进入的ViewHolder存入回收池
   6.  ArrayList<ViewHolder> mHiddenViews
      > - 是个缓存被隐藏的ViewHolder的ArrayList
-## 事件分发
+
+## 如何判断当前线程是主线程？为啥looper可以拿到线程，ThreadLocal是用来干嘛的？ThreadLocal原理是什么？
+1. `Looper.getMainLooper().getThread()`得到主线程， 与当前线程做比较
+2. `Looper`和一个线程通过`ThreadLocal`一一绑定 
+3. `ThreadLocal`为变量在每个线程中都创建了一个副本，那么每个线程可以访问自己内部的副本变量。例如数据库连接，Session会话管理可以重用线程的`ThreadLocal`   
+4. 每个线程(`Thread`)会持有一个`ThreadLocalMap`, 线程(`Thread`) 和 `ThreadLocalMap` 是 1对1，`ThreadLocalMap`的key是 `ThreadLocal`本身，为了防止内存泄漏，所以持有的是 `threadLocal` 的弱引用
+   > 内存泄漏：`ThreadLocal#set( Entry(key, value) ) `，而`Entry extends WeakReference<ThreadLocal<?>>`的，所以当`ThreadLocal=null`时，GC会把`ThreadLocal`回收，但是`Thread`不死，`ThreadLocalMap`就会一直存在 ，`GC`把`ThreadLocal`回收后，`ThreadLocalMap`还存在一条无用的信息(null，value还在)，这样就造成了内存泄漏，所以在`ThreadLocal`使用完成后，请调用`remove`方法
+5. ThreadLocal本身并不存储值，它只是作为一个key来让线程从ThreadLocalMap获取value
+6. 一个线程可以有多个TreadLocal来存放不同类型的对象的，但是他们都将放到你当前线程的ThreadLocalMap里
+
 ### 点击一个按钮后一直按住，同时挪开屏幕
 [事件分发三连问：事件是如何从屏幕点击最终到达 Activity 的？CANCEL 事件什么时候会触发？如何解决滑动冲突？](https://blog.csdn.net/Androiddddd/article/details/108804170)
 
@@ -791,6 +845,13 @@ Serializable序列化不保存静态变量，可以使用Transient关键字对�
 	- 注意这边没有前一个 Activity 不会回调 onStop，因为只有在 Activity 切到后台不可见才会回调 onStop；
 	- 弹出 Dialog 主题的 Activity 时前一个页面还是可见的，只是失去了焦点而已所以仅有 onPause 回调。
 	- > 这是因为透明的弹窗前一个 Acitivity 被认为其实还可见
+
+### launchMode的适用场景
+1. singleTop 适合接收通知启动的内容显示页面。例如，某个新闻客户端的新闻内容页面，如果收到10个新闻推送，每次都打开一个新闻内容页面是很烦人的。
+
+2. singleTask 适合作为程序入口点。例如浏览器的主界面。不管从多少个应用启动浏览器，只会启动主界面一次，其余情况都会走onNewIntent，并且会清空主界面上面的其他页面。之前打开过的页面，打开之前的页面就ok，不再新建。
+
+3. singleInstance 适合需要与程序分离开的页面。例如闹铃提醒，将闹铃提醒与闹铃设置分离。singleInstance不要用于中间页面，如果用于中间页面，跳转会有问题，比如：A -> B (singleInstance) -> C，完全退出后，在此启动，首先打开的是B。
 
 #### Activity 在 onResume 之后才显示的原因是什么
 - `onCreate` 方法里调用 `setContentView` 。里面是直接调用 `window` 的 `setContentView`，创建一个 `DecorView` 用来包住我们创建的布局。
