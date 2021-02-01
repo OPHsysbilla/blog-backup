@@ -357,3 +357,57 @@ Lru在Java里就是LinkedHashMap有序字典，每次get/put后把该元素挪�
         return len;
     }
 ```
+
+## 击鼓传花
+dp  
+第 i 个同学，可以收到第(i-1)个同学或者第(i+1)个同学的花。
+`dp[i][j]=dp[(i-1)][(j-1+n)%n]+dp[(i-1)][(j+1+n)%n];`
+
+[击鼓传花 - 动态规划](https://www.cnblogs.com/haimishasha/p/11296438.html)
+
+## 字符压缩算法（字符串解码）
+(括号匹配)  用栈
+
+
+## 反转链表II
+```Java
+
+    public static class SolutionReverseLinkedListNodeII {
+        //思路：head表示需要反转的头节点，pre表示需要反转头节点的前驱节点
+        //我们需要反转n-m次，我们将head的next节点移动到需要反转链表部分的首部，需要反转链表部分剩余节点依旧保持相对顺序即可
+        //比如1->2->3->4->5,m=1,n=5
+        //第一次反转：1(head) 2(next) 3 4 5 反转为 2 1 3 4 5
+        //第二次反转：2 1(head) 3(next) 4 5 反转为 3 2 1 4 5
+        //第三次发转：3 2 1(head) 4(next) 5 反转为 4 3 2 1 5
+        //第四次反转：4 3 2 1(head) 5(next) 反转为 5 4 3 2 1
+        public ListNode reverseBetween(ListNode head, int m, int n) {
+            ListNode dummy = new ListNode(0);
+            dummy.next = head;
+            ListNode prev = dummy;
+            while (m > 1) {
+                prev = prev.next;
+                m--;
+                n--;
+            }
+            head = prev.next;
+
+            // 1 2 3 4 5
+            while (n > 1) {
+                ListNode next = head.next; //    3 （head指向的元素一直不变）
+                head.next = head.next.next;   //     1-> 4
+                next.next = prev.next;   //   3 -> 2 （prev.next是上一次的next，永远是反转部分的第一个，因为prev的位置不变）
+                prev.next = next;  //  0 -> 2
+                n--;
+            }
+            return dummy.next;
+        }
+    }
+```
+
+
+# 73. 矩阵置零
+问题在于如何提醒是0
+方法一：扫一遍有0的地方，额外开两个数组记下i和j。再遍历一次将出现的地方置0
+方法二：扫一遍有0的地方标记为一个特殊值，再次遍历一次将特殊值出现的地方置0
+方法三：由于可能不知道特殊值设置为什么，所以把出现0的地方对应的第一行第一列标记为0。第一行第一列需要一开始就判断有没有0。
+    最后根据第一行第一列的是否有0来置0。

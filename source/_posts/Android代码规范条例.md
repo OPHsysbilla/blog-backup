@@ -171,7 +171,6 @@ PathMeasure.TANGENT_MATRIX_FLAG | PathMeasure.POSITION_MATRIX_FLAG);`
 98. 数据库的unique属性的列，insert()一旦失败，则批量都失败。此时可以用insert or replace，不会影响批量中其他数据的插入。
 99. `setRetainInstance(true)`设置为true，表示 configuration change 的时候，fragment实例不会背重新创建，即重建时不会经过onDestroy和onCreate。
 100. fragment 该方法也常常被用来处理 Activity re-creation 时候数据的保存。因此可以干很多骚操作，但即使是使用setRetainInstance还是有一定概率会被回收的，重新创建fragment后，requestCode和callback的关系就没有了。
-     > fragment 该方法也常常被用来处理 Activity re-creation 时候数据的保存。因此可以干很多骚操作，但即使是使用setRetainInstance还是有一定概率会被回收的，重新创建fragment后，requestCode和callback的关系就没有了。 
      
 24. `SharedPreferences`是文件的一种，读写有一定的缓存策略，在内存中会有一份`SharedPreferences`文件的缓存，因此在多进程模式下其读写就变得不可靠。当面对高并发读写访问的时候，有很大几率会**丢失数据**，故不建议在进程间通信中使用`SharedPreferences`
 25. Messenger是一种轻量级的`IPC`方案，它的底层实现就是`AIDL`。Messenger是以串行的方式处理请求的，即服务端只能一个个处理，不存在并发执行的情形
