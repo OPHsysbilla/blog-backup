@@ -1068,3 +1068,11 @@ suspend原理：编译器帮忙实现了状态机，根据不同状态调用不�
 	}
 ```
 ## onResume中Handler.post(Runnable)为什么获取不到宽高？
+
+## bitmap优化
+主要在 
+1. 尺寸压缩
+2. 颜色质量
+3. inBitmap
+  > 使用inBitmap，在4.4之前，只能重用相同大小的bitmap的内存区域，而4.4之后你可以重用任何bitmap的内存区域，只要这块内存比将要分配内存的bitmap大就可以（必须有相同的解码格式，例如大家都是8888的）这里最好的方法就是使用LRUCache来缓存bitmap，后面来了新的bitmap，可以从cache中按照api版本找到最适合重用的bitmap，来重用它的内存区域。 
+4. cache）

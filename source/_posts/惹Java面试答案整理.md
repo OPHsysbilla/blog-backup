@@ -14,7 +14,8 @@ tags:
 
 ## 如何检测内存泄漏
 
-
+## ReentranLock的tryLock原理是什么 ⭐
+https://mp.weixin.qq.com/s?__biz=MzI4MTA0OTIxMg==&mid=2247483680&idx=1&sn=e627b01321b034672d3d6ffc6f141407&source=41#wechat_redirect
 
 ## ThreadLocal是干嘛的，作用是什么 
 <!--more-->
