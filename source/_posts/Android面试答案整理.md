@@ -424,7 +424,13 @@ DEX分包是为了解决65536方法限制，系统在应用打包APK阶段，会
 5. ThreadLocal本身并不存储值，它只是作为一个key来让线程从ThreadLocalMap获取value
 6. 一个线程可以有多个TreadLocal来存放不同类型的对象的，但是他们都将放到你当前线程的ThreadLocalMap里
 
-### 点击一个按钮后一直按住，同时挪开屏幕
+### ThreadLocal是干嘛的，作用是什么 
+<!--more-->
+- 每个线程Thread维护了ThreadLocalMap这么一个Map变量，保证线程隔离且有唯一的ThreadLocal
+- 创建ThreadLocalMap的key是ThreadLocal对象本身（保证同一个线程总是取到同一个ThreadLocal），value则是要存储的对象
+- 会造成内存泄漏
+
+## 点击一个按钮后一直按住，同时挪开屏幕
 [事件分发三连问：事件是如何从屏幕点击最终到达 Activity 的？CANCEL 事件什么时候会触发？如何解决滑动冲突？](https://blog.csdn.net/Androiddddd/article/details/108804170)
 
 - 只要clickable和longClickable有一个为真，那么onTouchEvent就返回true。哪怕一个View是disable状态的 

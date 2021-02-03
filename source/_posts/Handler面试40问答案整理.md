@@ -10,6 +10,10 @@ categories: 面试
 - `epoll` 有什么优势？`Handler` 和管道(`Pipe`)的关系？`Android M` 开始，将 `Pipe` 换成了 `eventFd`是为什么？`Handler` 底层为什么使用管道，而不是 `Binder` ？`Handler` 可以 `IPC` 通信吗？
 <!--more-->
 
+# epoll为什么不阻塞
+`nativePollOnce` 使用 `epoll` 监听文件描述符
+`Object.wait()` 使用 `futex` Linux call
+而 `Binder` 的 `oneway` 调用是阻塞的： `wait_event_interruptible` 和 `wait_up_interruptible`
 # 何理解 nativePollOnce() 方法？
     1. 最终会调用到 Native 层的 pollInner() 方法。
     2. 在 pollInner() 中，处理流程：
