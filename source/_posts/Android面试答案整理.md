@@ -192,6 +192,7 @@ WindowInputEventReceiver 是在 ViewRootImpl.setView 里面初始化的，setVie
 - `Unstable` provider：若使用过程中，provider要是挂了，你的进程不会挂。但你会收到一个DeadObjectException的异常，可进行容错处理。
 
 ### 插件中没有在manifest中注册的ContentProvider如何跑起来
+> 类似于某些Router的做法。hook了startActivity，把ActivityThread的Instrument给反射改变为，一个动态代理了StartActivity的EvilInstrument再装回去。
 - 定义一个占坑的ContentProvider（运行在一个独立的进程）
 - hook掉插件Activity的Context,并返回自定义的PluginContentResolver
 - PluginContentResolver在获取ContentProvider时，先把个占坑的ContentProvider唤醒。即让它在ActivityManagerService中跑起来
