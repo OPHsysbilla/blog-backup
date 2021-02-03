@@ -44,7 +44,13 @@ categories: 面试
 > 2. 卡顿发生时，获取到前面卡顿时的堆栈可能不准
 > 每隔16.67ms在异步线程获取一下主线程的堆栈然后保存起来，在卡顿发生时，把这些周期性采集的堆栈当做卡顿时的堆栈。这种方法可以抓住大部分卡顿现场,不过也会获取一些无用的堆栈信息。
 
-## EventBus原理是什么？BroadCast和Handler-优缺点比较
+## EventBus原理是什么？
+### EventBus粘性事件是什么
+在订阅者订阅粘性事件时，会自动匹配最后发送的粘性事件。
+> 在Android开发中，Sticky事件只指事件消费者在事件发布之后才注册的也能接收到该事件的特殊类型。Android中就有这样的实例，也就是Sticky Broadcast，即粘性广播。正常情况下如果发送者发送了某个广播，而接收者在这个广播发送后才注册自己的Receiver，这时接收者便 无法接收到刚才的广播，为此Android引入了StickyBroadcast，在广播发送结束后会保存刚刚发送的广播（Intent），这样当接收者注册完Receiver 后就可以接收到刚才已经发布的广播。这就使得我们可以预先处理一些事件，让有消费者时再把这些事件投递给消费者
+
+
+### EventBus BroadCast和Handler-优缺点比较
 
 ## 有用过MVVM吗？ RecyclerView的adapter是持有的源数据源吗，放在presenter为什么不好，RecyclerView的复用过程
 
