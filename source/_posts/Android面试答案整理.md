@@ -35,6 +35,9 @@ categories: 面试
 
 ## 媒体文件断点续传是什么formData字段？你们的录音文件是一帧一帧的流传输吗？录音文件可以停止再录吗
  
+## 流式的加密和压缩
+
+
 ## 火焰图的原理是什么？systrace和traceView的原理是怎样的呢？他们计算函数耗时的采样率是怎样的？
 > `Rabbit`计算卡顿的时候就是周期性的采集主线程堆栈。因为：
 > 1. 获取主线程的堆栈可能会导致主线程卡顿
@@ -45,7 +48,12 @@ categories: 面试
 ## 有用过MVVM吗？ RecyclerView的adapter是持有的源数据源吗，放在presenter为什么不好，RecyclerView的复用过程
 
 ## 为什么不能一边offsetTopAndBottom一边动画呢？会一直触发onLayout，为啥不能同时进行
+ 
+## 为什么要求尽量不写全局变量？Java的强引用、软引用、弱引用和虚引用原理
+如果这个strongReference是全局变量时，就需要在不用这个对象时赋值为null，因为强引用不会被垃圾回收
 
+如果一个对象只具有软引用，则内存空间充足时，垃圾回收器就不会回收它；
+如果内存空间不足了，就会回收这些对象的内存。只要垃圾回收器没有回收它，该对象就可以被程序使用。
 
 ## 点击屏幕后触发的流程讲一下，从硬件开始说。
 1. 在 ViewRootImpl 里有一个 WindowInputEventReceiver 用来接受事件并进行分发。
@@ -804,9 +812,9 @@ okhttp记录了每个socket流使用情况，同时设定了每个socket能同�
 ### OkHttp的HTTP缓存
 主要是根据`Header(Date\Expires\Last-Modified\ETag\Age)`来缓存响应数据减少重复的网络请求
 
+## 
 
 ## 点击桌面图标进入我们软件应用时发生了什么？
-
 通过翻阅 Application 启动的源码，当我们点击桌面图标进入我们软件应用的时候，会由 AMS 通过 Socket 给 Zygote 发送一个 fork 子进程的消息，当 Zygote fork 子进程完成之后会通过反射启动 ActivityThread##main 函数，最后又由 AMS 通过 aidl 告诉 ActivityThread##H 来反射启动创建Application 实例，并且依次执行 `attachBaseContext` 、`onCreate` 生命周期，由此可见我们不能在这 2 个生命周期里做主线程耗时操作。
 
 ## OOM是什么，怎么导致的？
@@ -816,10 +824,6 @@ okhttp记录了每个socket流使用情况，同时设定了每个socket能同�
 - java.lang.StackOverflowError ------> 不会抛OOM error，但也是比较常见的Java内存溢出。JAVA虚拟机栈溢出，一般是由于程序中存在死循环或者深度递归调用造成的，栈大小设置太小也会出现此种溢出。可以通过虚拟机参数-Xss来设置栈的大小。
 
 ## Glide是如何监听周期的？
-
-### Glide 加载 Gif 的原理
-就是将 Gif 解码成多张图片进行无限轮播，每帧切换都是一次图片加载请求，再加载到新的一帧数据之后会对旧的一帧数据进行清除，然后再继续下一帧数据的加载请求，以此类推，使用 Handler 发送消息实现循环播放
-
 #### 监听生命周期
 
 用了一个没有UI的Fragment（名为RequestManagerFragment）入到传入的非Application的Context的FragmentManager中
@@ -846,12 +850,15 @@ bitmapPool.trimMemory(level);
 arrayPool.trimMemory(level);
 ```
 
-### Parcelable和Serializable区别
+### Glide 加载 Gif 的原理
+就是将 Gif 解码成多张图片进行无限轮播，每帧切换都是一次图片加载请求，再加载到新的一帧数据之后会对旧的一帧数据进行清除，然后再继续下一帧数据的加载请求，以此类推，使用 Handler 发送消息实现循环播放
+
+## Parcelable和Serializable区别
 Parcelable的性能比Serializable好，在内存开销方面较小，所以在内存间数据传输时推荐使用Parcelable，如activity间传输数据，而Serializable可将数据持久化方便保存，所以在需要保存或网络传输数据时选择Serializable，因为android不同版本Parcelable可能不同，所以不推荐使用Parcelable进行数据持久化。
 
 Serializable序列化不保存静态变量，可以使用Transient关键字对部分字段不进行序列化，也可以覆盖writeObject、readObject方法以实现序列化过程自定义。
 
-### 两个Activity切换生命周期是怎样的？
+## 两个Activity切换生命周期是怎样的？
  [两个Activity切换生命周期是怎样的？](https://blog.csdn.net/lei396601057/article/details/109272301)
 假设 从 A Activity 跳转到 B Activity
 - lanchMode不同：
