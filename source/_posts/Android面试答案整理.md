@@ -44,6 +44,7 @@ categories: 面试
 > 2. 卡顿发生时，获取到前面卡顿时的堆栈可能不准
 > 每隔16.67ms在异步线程获取一下主线程的堆栈然后保存起来，在卡顿发生时，把这些周期性采集的堆栈当做卡顿时的堆栈。这种方法可以抓住大部分卡顿现场,不过也会获取一些无用的堆栈信息。
 
+## EventBus原理是什么？BroadCast和Handler-优缺点比较
 
 ## 有用过MVVM吗？ RecyclerView的adapter是持有的源数据源吗，放在presenter为什么不好，RecyclerView的复用过程
 
@@ -63,6 +64,7 @@ WindowInputEventReceiver 是在 ViewRootImpl.setView 里面初始化的，setVie
 
 ## 如何计算冷启动时间？冷启动的优化是什么？
 ![启动app过程](https://img-blog.csdn.net/20180823215319329?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3FpYW41MjBhbw==/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70)
+
 ## View的事件分发
 1. [Android事件分发机制 详解攻略，您值得拥有](https://blog.csdn.net/carson_ho/article/details/54136311)
 
@@ -123,7 +125,6 @@ WindowInputEventReceiver 是在 ViewRootImpl.setView 里面初始化的，setVie
 > 3. 全量写入：无论是 commit 还是 apply，即使改动一个条目，也会把全部内容写到文件
 > 4. 卡顿：异步落盘机制在应用崩溃时会导致数据丢失
 
-EventBus、BroadCast和Handler-优缺点比较
 ## ContentProvider是线程安全的吗？SharedPreferences是线程安全的吗？
 - SharedPreferences是线程安全的，不是进程安全
 - ContentProvider不是线程安全的，是进程安全的

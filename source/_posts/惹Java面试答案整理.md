@@ -14,15 +14,13 @@ tags:
 
 ## 如何检测内存泄漏
 
-## ReentranLock的tryLock原理是什么 ⭐
+## ReentranLock的tryLock原理是什么？ ⭐
 [ReentranLock的tryLock原理是什么](https://mp.weixin.qq.com/s?__biz=MzI4MTA0OTIxMg==&mid=2247483680&idx=1&sn=e627b01321b034672d3d6ffc6f141407&source=41#wechat_redirect
 )
 
-## ThreadLocal是干嘛的，作用是什么 
-<!--more-->
-- 每个线程Thread维护了ThreadLocalMap这么一个Map变量，保证线程隔离且有唯一的ThreadLocal
-- 创建ThreadLocalMap的key是ThreadLocal对象本身（保证同一个线程总是取到同一个ThreadLocal），value则是要存储的对象
-- 会造成内存泄漏
+## AbstractQueuedSynchronizer（AQS原理是什么？） ⭐
+
+[AbstractQueuedSynchronizer之AQS](https://www.jianshu.com/p/d64b961eed35)
 
 ## Java集合小抄
 [Java后台面试 常见问题](https://www.jianshu.com/p/1acdfac2b4e4)
