@@ -6,8 +6,6 @@ tags:
     - Java
     - 面试
 ---
-
-
 ## Java引用类型原理剖析：WeakRefrence、SoftReference
 
 ## GC的时候怎么判断什么对象需要被回收？哪些是GC Roots可达结点
@@ -246,31 +244,35 @@ JVM退出时，不必关心守护线程是否已结束，所以final可能不会
 > [摘自地址](https://www.jianshu.com/p/4f84c14f1a22)
 > 从根本上讲所有的异常都属于Throwable的子类，从大的方面讲分为Error（错误）和Exception（异常）。Eror是程序无法处理的异常，当发生Error时程序线程会终止运行。我们一般意义上讲的异常就是指的Exception。
 
-## 3. 常⽤用的集合类有哪些？⽐如list如何排序？
-## 4. ArrayList和LinkedList内部实现大致是怎样的？他们之间的区别和优缺点？
-## 5. 内存溢出是怎么回事？举个例子。
 ## 6. ==和equals的区别
 `==` 操作符比内存地址
 `equals()` 函数比值，可以被继承
 ## 7. hashCode()⽅法的作⽤
-一般用作`Hashmap`取值，重写`equals()`必重写`hashCode()`，并且保证对象为final不变更，出现存取时`hashCode()`不一致的问题
-## 8. NIO是什什么？适⽤用于何种场景？
-## 9. Hashmap实现原理理？如何保证HashMap线程安全？
-## 10. jvm内存结构？为什什么需要GC？
-## 11. NIO模型，select/epoll的区别，多路复⽤的原理？
+一般用作`Hashmap`取值，重写`equals()`必重写`hashCode()`，并且保证对象为final不变更，出现存取时`hashCode()`不一致的问题。
+通过对key的hashCode()进行hashing，并计算下标( n-1 & hash)，从而获得buckets的位置。如果产生碰撞，则利用key.equals()方法去链表或树中去查找对应的节点。
+
+## 如果HashMap的大小超过了负载因子(load factor)定义的容量，怎么办？
+如果超过了负载因子(默认0.75)，则会重新resize一个原来长度两倍的HashMap，并且重新调用hash方法。
+
+## HashMap可以接受null吗？
+HashMap可以接受null
+
 ## 12. java中⼀一个字符占多少个字节？int，long，double占多少个字节？
 `char` 2
 `int` 4
 `long/ double / float` 8
 
-## 13. 创建⼀一个类的实例例都有哪些⽅方法？
-## 14. final/finaly/finalize区别？
-## 15. Session/Cookie区别？
-## 16. String/StringBuffer/StringBuilder的区别以及实现？
-## 17. Servlet⽣生命周期
-## 18. 如何⽤用java分配⼀一段连续的1G的内存空间?需要注意些什什么？
-## 19. Java有⾃己的内存回收机制，但为什么还存在内存泄漏的问题呢？
-## 20. 什什么是java序列化，如何实现java序列化（写⼀一个例例⼦子）
+
+##   StringBuilder 和 StringBuffer 的区别是什么？String的引用到底有几个，放在内存的哪里？
+1. `StringBuffer`是上了`synchonrize`锁的`StringBuilder`。
+2. 在代码里写字符串相加，编译器会自动优化为每次`new`一个`StringBuilder`进行append，所以不要在循环里累加字符串，会生成很多`StringBuilder`
+3. 字符串会加在`运行时常量池（Runtime Constant Pool）`里：	
+   - JDK 1.6 及之前的版本中，常量池是分配在方法区中永久代(Parmanent Generation)内的，而永久代和 Java 堆是两个完全分开的区域。
+   - 从JDK 1.7开始去永久代，字符串常量池已经被转移至 Java 堆中
+4. 字符串的`intern()`可以返回常量池里的位置
+
+> —— [【扯皮系列】一篇与众不同的 String、StringBuilder 和 StringBuffer 详解](https://www.cnblogs.com/cxuanBlog/p/13053615.html)
+
 ## 21. String s = new String("abc")创建了几个String Object？
 如果"abc"已经存在于常量池，则只有1个；
 否则，2个，包含插入常量池的一个；
@@ -282,19 +284,35 @@ JVM退出时，不必关心守护线程是否已结束，所以final可能不会
 一个`new`出来的一个对象`new String(xx)`，在堆上，内部指向常量池里的内容
 
 [深入理解Java：String](https://www.cnblogs.com/benwu/articles/5643502.html)
-## 22. 静态对象：
-## 23. final关键字：
-## 24. HashMap与HashTable的区别：
-## 25. 多态：
-## 26. 集合删除：
-## 27. 参数传递与引⽤用传递：
-## 28. hash冲突：
+
+## 不关闭流(stream)会导致内存泄漏吗？文件流关闭的时机是怎样的，先打开先关闭还是按照依赖关系？
+> 内存泄露：GC 回收对象采用GC Roots强引用可到达机制。当生命周期长的实例不合理地持有一个生命周期短的实例S，导致S实例无法被正常回收
+1. 例如 `FileInputStream` 会被 `FinalizerReference` 这个类(GC Root)持有，在`FileInputStream` 的 `finalize()` 里会调用`close()`。
+2. stream派生类使用的是装饰模式，这些包装类例如`BufferedWriter`会在`close()`里自动关闭掉源数据流。
+3. `close()`往往会设计成可以多次调用的样子。有时候调用`close()`会报错是因为关闭方法中又调用了write等方法时会抛异常，例如`BufferedWriter`。这种时候只调用	`BufferedWriter`的`close()`即可。
+
+所以需要主动调用`close()`并不是因为内存泄漏，而更多的是因为资源泄漏。
+> It's not a memory leak as much as a file-handle leak.
+> —— [Why is it good to close() an inputstream?](https://stackoverflow.com/questions/26541513/why-is-it-good-to-close-an-inputstream)
+### 为什么要关闭流
+![linux file system](https://asset.droidyue.com/image/2019_05/file-descriptor_table.jpg)
+如上图从左至右有三张表
+- file descriptor table 归属于单个进程
+- global file table(又称open file table) 归属于系统全局
+- inode table 归属于系统全局
+
+每个进程可以开启的文件描述符个数是有限制的，如果不释放file descriptor，会导致应用后续依赖file descriptor的行为(socket连接，读写文件等)无法进行，甚至是导致进程崩溃。
+所以不能总是依赖`finalize()`或者`gc()`去手动关掉流。要手动关闭流
+
+> —— [未关闭的文件流会引起内存泄露么？](https://droidyue.com/blog/2019/06/09/will-unclosed-stream-objects-cause-memory-leaks/)
+
+
+### 文件流的关闭时机
+可以使用java 7后的AutoClose，
+
 ## 29. 在java中一个字符能否表示一个汉字：
 char可以表示一个汉字，char默认两个字节；
 Java默认UTF-16编码，一个汉字2个字节（UTF-8一个汉字3～4个字节）
-## 30. 一致性hash：
-## 31. java反射机制
-## 32. 幂等的处理理方式：
 ## 33. hashmap在jdk1.8中的改动?
 1. 冲突时大于8个元素时由链表改为了红黑树
 2. `put`时是先插入，再判断是否要扩容
@@ -430,6 +448,9 @@ protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundE
 5. JVM启动包含main方法的启动类时。
 
 #### 重载和重写
+> - Q：　比如 `method(String s)` `method(Object o)` 两个方法，调用`method(null)`会出现什么情况
+> - A： 重载永远会匹配更精确的那一个，Object是String的超类，所以会匹配`method(String s)`。如果同时有`method(CharactSequence s)`，它们都是Object的子类，编译器不知道谁更精确了，就会编译报错。可以显示强转型到想要的重载方法里。比如`method((Object) null)`
+
 方法调用就是指通过 .class 文件中方法的符号引用，确认方法的直接引用的过程，这个过程有可能发生在加载阶段，也有可能发生在运行阶段。
 
 1. `重载` （不同参数、返回值）的方法在加载阶段就确定了方法的直接引用。
@@ -517,3 +538,47 @@ protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundE
 2. 类型擦除：所有类型参数都用他们的限定类型替换，包括类、变量和方法（类型擦除）
 3. 如果类型擦除和多态性发生了冲突时，则在子类中生成桥方法解决
 4. 如果调用泛型方法的返回类型被擦除，则在调用该方法时插入强制类型转换
+
+
+## 如何创建一个线程
+第一种：继承Thread类
+第二种：实现Runnable接口
+第三种：实现Callable接口
+
+
+第四种：Executor框架来创建线程池
+	```Java
+		ExecutorService executorService = Executors.newCachedThreadPool();
+		for(int i = 0; i < 5; i++){
+			executorService.execute(new MyThreadFour());
+		}
+		executorService.shutdown();
+	```
+
+## 8. NIO是什什么？适⽤用于何种场景？
+## 9. Hashmap实现原理理？如何保证HashMap线程安全？
+## 10. jvm内存结构？为什什么需要GC？
+## 11. NIO模型，select/epoll的区别，多路复⽤的原理？
+## 13. 创建⼀一个类的实例例都有哪些⽅方法？
+## 14. final/finaly/finalize区别？
+## 15. Session/Cookie区别？
+## 16. String/StringBuffer/StringBuilder的区别以及实现？
+## 17. Servlet⽣生命周期
+## 18. 如何⽤用java分配⼀一段连续的1G的内存空间?需要注意些什什么？
+## 19. Java有⾃己的内存回收机制，但为什么还存在内存泄漏的问题呢？
+## 20. 什什么是java序列化，如何实现java序列化（写⼀一个例例⼦子）
+
+## 3. 常⽤用的集合类有哪些？⽐如list如何排序？
+## 4. ArrayList和LinkedList内部实现大致是怎样的？他们之间的区别和优缺点？
+## 5. 内存溢出是怎么回事？举个例子。
+
+## 22. 静态对象：
+## 23. final关键字：
+## 24. HashMap与HashTable的区别：
+## 25. 多态：
+## 26. 集合删除：
+## 27. 参数传递与引⽤用传递：
+## 28. hash冲突：
+## 30. 一致性hash：
+## 31. java反射机制
+## 32. 幂等的处理理方式：

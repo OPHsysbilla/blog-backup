@@ -28,15 +28,45 @@ categories: 面试
 
 ## 预热webview；预加载离线包；
 
+## 系统级别除了Binder还有哪些跨进程方式？ Zygote通过Socket监听来fork新的进程，native crash发出信号kill process
+
+
+## 插件化组件化　阿里Atlas 360的DroidPlugin技术（项目用到了）对比
+
+## 动态化方案
+Weex  ReactNative  flutter
+
 ## Xposed
 是干嘛的？
 
 ## 音频文件会选择怎样的压缩方式？zlib？
+```JS
+"accept-encoding", "deflate, br"
+"accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8"
+```
 
+> Android 视频压缩常见3种方案:(1)FFmpeg,(2)mp4praser,(3)自带的MediaCodec
 ## 媒体文件断点续传是什么formData字段？你们的录音文件是一帧一帧的流传输吗？录音文件可以停止再录吗
  
 ## 流式的加密和压缩
 
+###  
+使用ZipFile打开的所有ZIP文件都在内存中存在映射，所以使用ZipFile的性能优于 ZipInputStream。然而，如果同一ZIP文件的内容在程序执行期间经常改变，或是重载的话，使用ZipInputStream就成为你的首选了。
+> ZipInputStream和FileInputStream流读出的时候，ZIP条目不使用高速缓冲
+
+## AudioFlinger 和 环形FIFO
+1. 环形FIFO
+这样AudioTrack和AudioFlinger管理着同一个 audio_track_cblk_t，通过它实现了环形FIFO。AudioTrack向FIFO中写入音频数据，AudioFlinger从FIFO中读取音频数据，经Mixer后送给AudioHardware进行播放。
+1) AudioTrack是FIFO的数据生产者；
+2) AudioFlinger是FIFO的数据消费者；
+
+2. construct the shared structure in-place.
+```C++
+    // 这是 C++ 的 placement new（定位创建对象）语法：new(@BUFFER) @CLASS();
+    // 可以在特定内存位置上构造一个对象
+    // 这里，在匿名共享内存首地址上构造了一个 audio_track_cblk_t 对象
+    // 这样 AudioTrack 与 AudioFlinger 都能访问这个 audio_track_cblk_t 对象了
+```
 
 ## 火焰图的原理是什么？systrace和traceView的原理是怎样的呢？他们计算函数耗时的采样率是怎样的？
 > `Rabbit`计算卡顿的时候就是周期性的采集主线程堆栈。因为：
@@ -56,9 +86,11 @@ categories: 面试
 
 ## 为什么不能一边offsetTopAndBottom一边动画呢？会一直触发onLayout，为啥不能同时进行
  
-## 为什么要求尽量不写全局变量？Java的强引用、软引用、弱引用和虚引用原理
-如果这个strongReference是全局变量时，就需要在不用这个对象时赋值为null，因为强引用不会被垃圾回收
+## 为什么要求尽量不写全局变量？
+1. 要求尽量不写全局变量是因为你要确保清除全局变量的引用或者重置全局变量的值，而这很容易被遗漏。
+2. 如果这个strongReference是全局变量时，就需要在不用这个对象时赋值为null，因为强引用不会被垃圾回收。
 
+## Java的强引用、软引用、弱引用和虚引用原理
 如果一个对象只具有软引用，则内存空间充足时，垃圾回收器就不会回收它；
 如果内存空间不足了，就会回收这些对象的内存。只要垃圾回收器没有回收它，该对象就可以被程序使用。
 

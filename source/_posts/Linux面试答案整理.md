@@ -6,13 +6,23 @@ tags:
 
 ---
 ## 在Linux下进程通信
-1、匿名管道(pipe)
-2、命名管道(FIFO)
-3、信号(signal)
-4、信号量(semaphore)
-5、消息队列(message queue)
-6、共享内存(share memory)
-7、套接字(Socket)
+1. 匿名管道(pipe)
+  
+   只能由一个进程流向另一个进程
+   父进程创建一个管道，然后fork产生一个子进程，由于子进程拥有父进程的副本，所以父子进程可以通过管道进程通信。
+  ![匿名管道](https://img-blog.csdn.net/20130720163533343?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvYW5vbnltYWxpYXM=/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70/gravity/SouthEast)
+   当管道的一端被关闭后，会出现下面的几种情况：
+   1. 当读一个写端被关闭的管道时，在所有数据都被读取后，read返回0，表示文件结束；如果写端没有被关闭，但是没有数据，则读端读完数据后阻塞；
+   2. 当写一个读端被关闭的管道时，则产生信号SIGPIPE，write返回-1，errno设置为EPIPE；如果读端没有被关闭，写端写满数据后，则写端阻塞。
+
+2. 命名管道(FIFO)
+3. 信号(signal)
+4. 信号量(semaphore)
+5. 消息队列(message queue)
+  消息队列是由消息的链表，存放在内核中并由消息队列标识符标识。消息队列克服了信号传递信息少、管道只能承载无格式字节流以及缓冲区大小受限等缺点。
+
+6. 共享内存(share memory)
+7. 套接字(Socket)
  
 ## mmu什么
 [arm-linux学习-（MMU内存管理单元）](https://www.cnblogs.com/alantu2018/p/9002309.html)
