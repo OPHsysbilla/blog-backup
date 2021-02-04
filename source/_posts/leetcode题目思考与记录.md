@@ -40,8 +40,16 @@ categories: 面试
 ### 大根堆
 `PriorityQueue`默认是小跟堆
 
+### 背包问题为什么不能换顺序？组合和排序有什么不同？ 卡特兰数是什么 ⭐
+[零钱兑换II和爬楼梯问题到底有什么不同？](https://leetcode-cn.com/problems/coin-change-2/solution/ling-qian-dui-huan-iihe-pa-lou-ti-wen-ti-dao-di-yo/)
 
 ### 快排优化
+
+1. [42. 接雨水](https://leetcode-cn.com/problems/trapping-rain-water/)
+
+2. [84. 柱状图中最大的矩形](https://leetcode-cn.com/problems/largest-rectangle-in-histogram/)
+
+3. 保卫王国 - 牛客
 
 ### 归并排序 
 > [剑指 Offer 51. 数组中的逆序对](https://leetcode-cn.com/problems/shu-zu-zhong-de-ni-xu-dui-lcof/)和 [315. 计算右侧小于当前元素的个数]都是归并排序的相同方法，区别在于左指针还是右指针入队时判断
@@ -131,7 +139,7 @@ public String[] largestNumberList(int[] nums) {
 
 ### 46. 全排列
 > 总个数是卡特兰数
-方法一，回溯，不重复元素下标，然后对应两个位置交换。这种不保证字典序
+方法一，回溯，不重复元素下标，然后对应两个位置交换。这种不保证字典序，保证字典序需要预先对list排序
 ```Java
 public void recursion(List<Integer> a, int k) {
     if (index == nums.length) {
@@ -256,13 +264,6 @@ public void recursion(List<Integer> a, int k) {
 ```
 ### 约瑟夫环问题
  [见此](https://blog.csdn.net/lei396601057/article/details/109312337)
-
-
-1. [42. 接雨水](https://leetcode-cn.com/problems/trapping-rain-water/)
-
-2. [84. 柱状图中最大的矩形](https://leetcode-cn.com/problems/largest-rectangle-in-histogram/)
-
-3. 保卫王国 - 牛客
 
 ### 矩阵最长递增路径
 同一个单元格对应的最长递增路径的长度是固定不变的。
