@@ -137,7 +137,8 @@ WindowInputEventReceiver 是在 ViewRootImpl.setView 里面初始化的，setVie
 ## View的事件分发
 1. [Android事件分发机制 详解攻略，您值得拥有](https://blog.csdn.net/carson_ho/article/details/54136311)
 
-## Activity启动后View何时开始绘制（onCreate中还是onResume之后？）
+## Activity启动后View何时开始绘制（onCreate中还是onResume之后？）⭐
+[Activity启动后View何时开始绘制（onCreate中还是onResume之后？）](https://www.jianshu.com/p/c5d200dde486)
 - 由于onCreate会先于handleResumeActivity执行，我们在onCreate中调用了setContentView，也只是生成DecorView并给这个DecorView的内容设置了布局而已，此时还并没有把这个DecorView添加到Window中，同样，WMS中也还没有这个Window，所以此时并不能做任何事情（绘制、接收点击事件等），虽然调用了requestLayout和invalidate，并不会真正触发布局和重绘（因为还没有与ViewRootImpl进行绑定）
 - Activity与Window产生联系，是在调用activity#attach方法中，生成了一个PhoneWindow，并把这个activity对象自身，设置给了Window的Callback回调（Activity实现了Window的Callback接口）
 - Window与WindowManagerService产生联系，是在handleResumeActivity中，先执行了onResume方法，通过调用WindowManagerImpl#addView方法将这个Activity对应的DecorView添加到了这个Window中，addView方法是一个IPC操作，将这个Window也添加到了WindowManagerService中；
@@ -181,7 +182,7 @@ WindowInputEventReceiver 是在 ViewRootImpl.setView 里面初始化的，setVie
 
 - `watch()`会生成一个Activity的UUID到retainedKeys队列中，retainedKeys队列记录了我们执行了监控的引用对象。而queue中会保存回收的引用。所以通过二者的对比，我们就可以找到内存泄漏的引用了
 
-- `watch()`在主线程空闲的时候 `Looper.myQueue().addIdleHandler()`一直检测，多次重试后最终会掉哟罡`ensureGone`
+- `watch()`在主线程空闲的时候 `Looper.myQueue().addIdleHandler()`一直检测，多次重试后最终会调用`ensureGone`
 
 - 如果监控对象没有回收，执行一次gc()，检测移除已经回收的监控对象，如果还是没有回收，证明发生了内存泄漏。此时dump出hprof文件到另一个前台服务IntentService，启动时会调用onHandleIntent方法，该方法在父类中实现了。实现中会调用onHandleIntentInForeground()方法
 	> 对于执行垃圾回收需要使用Runtime.getRuntime().gc()， 
@@ -224,6 +225,7 @@ WindowInputEventReceiver 是在 ViewRootImpl.setView 里面初始化的，setVie
 - `Unstable` provider：若使用过程中，provider要是挂了，你的进程不会挂。但你会收到一个DeadObjectException的异常，可进行容错处理。
 
 ### 插件中没有在manifest中注册的ContentProvider如何跑起来
+> 类似于某些Router的做法。hook了startActivity，把ActivityThread的Instrument给反射改变为，一个动态代理了StartActivity的EvilInstrument再装回去。
 - 定义一个占坑的ContentProvider（运行在一个独立的进程）
 - hook掉插件Activity的Context,并返回自定义的PluginContentResolver
 - PluginContentResolver在获取ContentProvider时，先把个占坑的ContentProvider唤醒。即让它在ActivityManagerService中跑起来
@@ -237,7 +239,7 @@ WindowInputEventReceiver 是在 ViewRootImpl.setView 里面初始化的，setVie
 `zygote` 进程 `fork` 出新的子进程，即 `App` 进程
 3. 然后进入 `ActivityThread#main` 方法中，这时运行在App进程中，通过 `ActivityManagerServiceBinder` IPC的形式向 `system_server` 进程发起 `attachApplication` 请求
 	> 获得AMS(ActivityManagerService)实例调用 `mgr.attachApplication(mAppThread);`
-4. `system_server` 接收到请求后，进行一些列准备工作后，再通过 `Binder` IPC 向App进程发送 `scheduleLaunchActivity` 请求
+4. `system_server` 接收到请求后，进行一些列准备工作后，再通过 `Binder` IPC 向App进程binder线程( `ApplicationThread` )发送 `scheduleLaunchActivity` 请求
 5. App进程binder线程（ `ApplicationThread` ）收到请求后，通过 `Handler` 向主线程发送 `LAUNCH_ACTIVITY` 消息
 6. 主线程收到Message后，通过反射机制创建目标Activity，并回调Activity的`onCreate`
 
