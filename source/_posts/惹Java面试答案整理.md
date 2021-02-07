@@ -273,6 +273,12 @@ HashMap可以接受null
 
 > —— [【扯皮系列】一篇与众不同的 String、StringBuilder 和 StringBuffer 详解](https://www.cnblogs.com/cxuanBlog/p/13053615.html)
 
+
+1. class文件中常量池保存的是字符串常量，类和接口名字，字段名，和其他一些在class中引用的常量。每个class都有一份。
+2. 运行时常量池保存的是从class文件常量池构建的静态常量引用和符号引用。每个class都有一份。
+3. 字符串常量池保存的是“字符”的实例，供运行时常量池引用。
+> —— [JVM详解之:运行时常量池](https://www.cnblogs.com/flydean/p/jvm-run-time-constant-pool.html)
+
 ## 21. String s = new String("abc")创建了几个String Object？
 如果"abc"已经存在于常量池，则只有1个；
 否则，2个，包含插入常量池的一个；

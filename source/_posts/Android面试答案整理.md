@@ -658,16 +658,16 @@ ProcessState::ProcessState(const char *driver)
 > [说说你对 binder 驱动的了解？](https://zhuanlan.zhihu.com/p/152237289)
 
 binder 驱动运行在内核空间，向上层提供 /dev/binder 设备节点及 open、mmap、ioctl 等系统调用。
-| 结构体 | 说明 | 
-|--|--| 
-| binder_proc | 描述使用 binder 的进程，当调用 binder_open 函数时会创建 | 
-| binder_thread | 描述使用 binder 的线程，当调用 binder_ioctl 函数时会创建 | 
-| binder_node | 描述 binder 实体节点，对应于一个 server ，即用户态的 BpBinder 对象 | 
-| binder_ref | 描述对 binder 实体节点的引用，关联到一个 binder_node | 
-| binder_buffer | 描述 binder 通信过程中存储数据的Buffer | 
-| binder_work | 描述一个 binder 任务 | 
-| binder_transaction | 描述一次 binder 任务相关的数据信息 | 
-| binder_ref_death | 描述 binder_node 即 binder server 的死亡信息 |
+| 结构体             | 说明                                                               |
+| ------------------ | ------------------------------------------------------------------ |
+| binder_proc        | 描述使用 binder 的进程，当调用 binder_open 函数时会创建            |
+| binder_thread      | 描述使用 binder 的线程，当调用 binder_ioctl 函数时会创建           |
+| binder_node        | 描述 binder 实体节点，对应于一个 server ，即用户态的 BpBinder 对象 |
+| binder_ref         | 描述对 binder 实体节点的引用，关联到一个 binder_node               |
+| binder_buffer      | 描述 binder 通信过程中存储数据的Buffer                             |
+| binder_work        | 描述一个 binder 任务                                               |
+| binder_transaction | 描述一次 binder 任务相关的数据信息                                 |
+| binder_ref_death   | 描述 binder_node 即 binder server 的死亡信息                       |
 ——————————————————
 ### oneway 是什么？如何异步等待？
 > [看你简历上写熟悉 AIDL，说一说 oneway 吧](https://zhuanlan.zhihu.com/p/143082762)
@@ -716,9 +716,103 @@ b.putBinder("bitmap", new ImageBinder(mBitmap));
 
 2. 一文超翔实的源码：[Android Bander设计与实现 - 设计篇](https://blog.csdn.net/universus/article/details/6211589)
 
+## 崩溃率日均多少？发生崩溃crash怎么办？
+
+## 如何获得crash时的堆栈
+崩溃主要分为java层crash，c/c++层crash，anr导致的crash。
+
+1. java层crash：可以通过手机`logcat`日志分析，也可以继承`UncaughtExceptionHandler`，并通过`Thread.setDefaultUncaughtExceptionHandler`来处理系统的异常，基本能收集到所有java层的crash的问题。
+2. c/c++层的crash：通过logcat日志进行分析，也可以通过`Breakpad`的来收集dump文件。可能收集不了任何堆栈，这要通过别的手段进行分析。
+3. anr的crash：通过logcat日志分析，anr的日志也可以通过/data/anr/traces.txt进行分析（高版本会没有权限读取这个文件）
+
+### 获得logcat和Jave堆栈的方法
+1. 获取logcat
+logcat日志流程是这样的，应用层 --> liblog.so --> logd，底层使用ring buffer来存储数据。
+获取的方式有以下三种：
+   1. 通过logcat命令获取。
+      > 优点：非常简单，兼容性好。
+
+      > 缺点：整个链路比较长，可控性差，失败率高，特别是堆破坏或者堆内存不足时，基本会失败。
+   2. hook liblog.so实现。通过hook liblog.so 中__android_log_buf_write 方法，将内容重定向到自己的buffer中。
+      > 优点：简单，兼容性相对还好。
+
+      > 缺点：要一直打开。
+   3. 自定义获取代码。通过移植底层获取logcat的实现，通过socket直接跟logd交互。
+      > 优点：比较灵活，预先分配好资源，成功率也比较高。
+
+      > 缺点：实现非常复杂
+二. 获取Java 堆栈
+   native崩溃时，通过unwind只能拿到Native堆栈。我们希望可以拿到当时各个线程的Java堆栈
+   1. Thread.getAllStackTraces()。
+       > 优点：简单，兼容性好。
+
+       > 缺点：
+       >   1. 成功率不高，依靠系统接口在极端情况也会失败。
+       >   2. 7.0之后这个接口是没有主线程堆栈。
+       >   3. 使用Java层的接口需要暂停线程
+   2. hook libart.so。
+   
+      [通过 hook ThreadList获取更完整的 Java 堆栈](#hook-ThreadList-to-get-full-stack)，获得跟ANR一样的堆栈。为了稳定性，我们会在fork子进程执行。
+      
+      获取Java堆栈的方法还可以用在卡顿时，因为使用fork进程，所以可以做到完全不卡主进程。
+      > 优点：信息很全，基本跟ANR的日志一样，有native线程状态，锁信息等等。
+
+      > 缺点：黑科技的兼容性问题，失败时可以用Thread.getAllStackTraces()兜底
+      
+
+### GC吞吐量是什么？怎么决定GC的
+注意阻塞式 GC 的次数和耗时，因为它会暂停应用线程，可能导致应用发生卡顿
+
+### 
+评论里提到的hook gc来避免gc引起的memory churn的技术，或者常见的引起内存泄漏几种情况的解决、数据结构优化(arraymap等)，更换序列化方案，view复用，object pool等优化方法，也没有具体的去讲解内存相关的操作系统概念和Android虚拟机heap space的结构和allocator的执行原理
+
+
+### tgkill 是什么？ 
+
+### 性能测试工具APM == 腾讯GT 
+
+### 为啥32位只有4GB虚拟内存，可分配的只有3GB？
+
+### Android 微信高性能日志存储库Xlog的使用
+
+### c++重定向原理？printf为什么可以输入变长的参数？
+
+### 线程数太多为啥会引起oom
+
+### hook liblog.so获取logcat是通过plt hook来操作么？可以用爱奇艺的那个xhook用到生产环境上么
+ 
+
+### 通过 hook ThreadList获取更完整的 Java 堆栈
+<a name="hook-ThreadList-to-get-full-stack"></a>
+用的是偏移的方法，但是我们这里是通过fork进程来做的，就算崩溃也不会影响主进程。
+
+用ThreadList::ForEach遍历art线程，首先要拿到ThreadList指针，我查了符号表，GetThreadList并未导出，如何获取呢？如果用thread_list_在Runtime类中的偏移获取，会有兼容性问题，文中所说的黑科技，是否有更好的办法？
+
+前一阵在研究ANR监控，发现可以通过拦截SIGQUIT信号监听ANR，调用Runtime::DumpForSigQuit获取trace文件的信息，再通过tgkill发送SIGQUIT给Signal Catcher线程。线上观察了一段时间，基本没有兼容性问题，除了Android 7及以下谷歌本身的bug偶尔会造成崩溃: b/36445592 Don't use pthread_getschedparam since pthread may have exited.
+
+这个方法在Android 5会有问题，需要手动暂停线程并做锁状态检查，要用到几个未导出符号(其中ThreadList的resumeAll/suspendAll通过ScopedSuspendAll解决了)
+
+### WatchDog干嘛的
+看门狗 WatchDog 的作用是监控重要服务的运行状态，当重要服务停止时，发生 Timeout 异常崩溃，WatchDog 负责将应用重启。而当关闭 WatchDog（执行stop（）方法）后，当重要服务停止时，也不会发生 Timeout 异常，是一种通过非正常手段防止异常发生的方法。
+### NDK为什么能编译通过忘记写返回值的函数
+貌似目前NDK中对于错误的检查还不够完善，比如对于函数的返回值，写了一个函数本身要写返回值，后面忘记写了发现IDE没有提示，并且能编译通过，但是在运行的时候会出现崩溃，而且崩溃的信息非常少，貌似就记得最后一行signal 6 还是 signal -1，当时的我看到这个是非常蒙逼的，大量的回退代码，添加日志，勉强找到，要是早点知道signal ，拿着对应的code对比，可能没那么痛苦
+
+### 获取JNI/C++崩溃堆栈，通过DumpReferenceTables 统计JNI的引用表
+找到了DumpReferenceTables工具的出处：
+在dalvik.system.VMDebug类中，是一个native方法，亦是static方法；在JNI中可以这么调用
+jclass vm_class = env->FindClass("dalvik/system/VMDebug");
+jmethodID dump_mid = env->GetStaticMethodID( vm_class, "dumpReferenceTables", "()V" );
+env->CallStaticVoidMethod( vm_class, dump_mid );
+
+### Android Bitmap 内存分配的变化
+- 在 Android 3.0 之前，Bitmap 对象放在 Java 堆，而像素数据是放在 Native 内存中。如果不手动调用 recycle，Bitmap Native 内存的回收完全依赖 finalize 函数回调，熟悉 Java 的同学应该知道，这个时机不太可控。
+- Android 3.0～Android 7.0 将 Bitmap 对象和像素数据统一放到 Java 堆中，这样就算我们不调用 recycle，Bitmap 内存也会随着对象一起被回收。不过 Bitmap 是内存消耗的大户，把它的内存放到 Java 堆中似乎不是那么美妙。即使是最新的华为 Mate 20，最大的 Java 堆限制也才到 512MB，可能我的物理内存还有 5GB，但是应用还是会因为 Java 堆内存不足导致 OOM。Bitmap 放到 Java 堆的另外一个问题会引起大量的 GC，对系统内存也没有完全利用起来。
+- 有没有一种实现，可以将 Bitmap 内存放到 Native 中，也可以做到和对象一起快速释放，同时 GC 的时候也能考虑这些内存防止被滥用？NativeAllocationRegistry 可以一次满足你这三个要求，Android 8.0 正是使用这个辅助回收 Native 内存的机制，来实现像素数据放到 Native 内存中。Android 8.0 还新增了硬件位图 Hardware Bitmap，它可以减少图片内存并提升绘制效率。
+- Android 9.0 ？ ⭐
+- 
 ## Android ANR的产生原因，如何定位ANR
 > [彻底理解安卓应用无响应机制](http://gityuan.com/2019/04/06/android-anr/)
-
+需要注意：**监控消息队列的运行时间**无法准确地判断是否真正出现了 ANR 异常，也无法得到完整的 ANR 日志。这个方案更应该放到卡顿的性能范畴。
 
 ## onCreate 方法里写死循环会 ANR 吗
 ANR 的四种场景：
@@ -738,15 +832,33 @@ Activity 的生命周期回调的阻塞并不在触发 ANR 的场景里面，所
 
 ## 图片占用内存大小如何计算
 ```Java
-Bitmap.Config ARGB_8888：由4个8位组成，即A=8，R=8，G=8，B=8，那么一个像素点占8+8+8+8=32位（4字节）
-Bitmap.Config ARGB_4444：由4个4位组成，即A=4，R=4，G=4，B=4，那么一个像素点占4+4+4+4=16位 （2字节）
-Bitmap.Config RGB_565：没有透明度，R=5，G=6，B=5，，那么一个像素点占5+6+5=16位（2字节）
-Bitmap.Config ALPHA_8：每个像素占8位，只有透明度，没有颜色。
+Bitmap.Config ARGB_8888(4B)：由4个8位组成，即A=8，R=8，G=8，B=8，那么一个像素点占8+8+8+8=32位（4字节）
+Bitmap.Config ARGB_4444(2B)：由4个4位组成，即A=4，R=4，G=4，B=4，那么一个像素点占4+4+4+4=16位 （2字节）
+Bitmap.Config RGB_565(2B)：没有透明度，R=5，G=6，B=5，，那么一个像素点占5+6+5=16位（2字节）
+Bitmap.Config ALPHA_8(1B)：每个像素占8位，只有透明度，没有颜色。
+Bitmap.Config RGBA_F16(8B)：
+Bitmap.Config HARDWARE：不可变不能被复制，仅存在于graphic memory里，只是为了draw
 一个像素的位数总和越高，图像也就越逼真。
 ```
-假设有一张480x800的图片
-1. 在色彩模式为`ARGB_8888`的情况下，一个像素所占的大小为4字节，会占用 `480*800*4/1024KB=1500KB` 的内存；
-2. 而在R`GB_565`的情况下，占用的内存为：`480*800*2/1024KB=750KB`
+在色彩模式为`ARGB_8888`的情况下，假设有一张 1080 x 452 的图片，`Bitmap.decodeResource()`源代码中里时：
+新高度 = 图片宽度 *（ 设备dpi / 资源目录对应dpi ）
+新高度 = 图片高度 *（ 设备dpi / 资源目录对应dpi ）
+
+
+|文件(fold)|密度值(density)|
+|:-----|:-----|
+|ldpi|120|
+|mdpi|160|
+|hdpi|240|
+|xhdpi|320|
+|xxhdpi|480|
+
+由于是`drawable`文件夹下的图片，默认为160dpi，假设设备dpi为480
+所以占用的Bitmap内存是：
+`1080 * ( 480dpi / 160dpi ) * 452 * ( 480dpi / 160dpi ) * 4 = 4393440B = 4290KB  = 4.18MB` （两次除以1024） 
+
+如果是网络的图片，就不会进行dpi转换，直接是分辨率 * 像素大小
+`1080 * 452  * 4 = 1952640 = 1906KB  = 1.86MB` 
 
 ## OkHttp相关
 ### 断点续传
