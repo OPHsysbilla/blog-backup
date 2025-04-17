@@ -21,6 +21,7 @@ categories: 面试
 ## apk资源加载以及activitythread相关的知识，或者inputevent机制
 
 ## Android 系统启动流程吗？
+[Android进阶面试题](https://www.jianshu.com/p/ae6340136b4a)
 
 ## Activity的启动流程
 
@@ -47,7 +48,10 @@ Weex  ReactNative  flutter
 
 > Android 视频压缩常见3种方案:(1)FFmpeg,(2)mp4praser,(3)自带的MediaCodec
 ## 媒体文件断点续传是什么formData字段？你们的录音文件是一帧一帧的流传输吗？录音文件可以停止再录吗
- 
+
+## 如果有个100M大的文件，需要上传至服务器中，而服务器form表单最大只能上传2M，可以用什么方法。
+
+
 ## 流式的加密和压缩
 
 ###  
@@ -128,6 +132,16 @@ WindowInputEventReceiver 是在 ViewRootImpl.setView 里面初始化的，setVie
 - 一是遍历绘制 View 树计算屏幕数据的时间超过了 16.6ms
 - 二是主线程一直在处理其他耗时的消息，导致遍历绘制 View 树的工作迟迟不能开始，从而超过了 16.6 ms 底层切换下一帧画面的时机
 
+## 编舞者在Android系统上的作用
+- 编舞者（Choreographer）控制Android屏幕(SurfaceFlinger)渲染刷新的执行顺序和优先级，避免UI界面的卡顿和掉帧。postFrameCallback 方法可以用来注册一个回调函数，在每一帧渲染之后执行。
+- 编舞者（Choreographer）在整个渲染链路中起着关键作用：
+  - 承上：接收和处理App的更新更新信息和回调，等到Vsync信号到来时执行统一处理。如：Input事件、动画、Traversal(measure、layout、draw等操作)、判断卡顿掉帧、记录Callback耗时等；
+  - 启下：请求和接收Vsync信号。
+
+> 因为没有Vsync机制，渲染帧中间是没有间隔的，一帧绘制完下一帧就开始被处理，也导致了帧率的不稳定。Android 4.0 引入了 硬件加速，Android 4.1 引入了 Vsync机制支持 + Triple Buffer (三重缓存) + Choreographer(编舞者)， 将 App渲染 和 SurfaceFlinger 合成的时间点规范化，提供了稳定的帧率输出。
+> [Android 渲染管线浅析](https://juejin.cn/post/7329144189001515048#heading-11)
+> [从架构到源码：一文了解Flutter渲染机制](https://mp.weixin.qq.com/s/wpU2APDdJdjMYkj5Kz2lTw)
+
 ## 计算一个view的嵌套层级
 递归往上调用`getParent()`
 ## 有了解音频底下audioPlayer的原理吗
@@ -189,6 +203,10 @@ WindowInputEventReceiver 是在 ViewRootImpl.setView 里面初始化的，setVie
 
 - 调用接口，将结果回调给listenerClassName所对应的类（这里是DisplayLeakService类）来进行处理
 
+## LeakCanary是在发生内存泄漏的时候去dump内存, 有没有在未发生内存泄漏的时候监控内存的手段。
+
+## feed流的冷启动起播速度优化。启动速度还跟什么有关?
+
 ## Serializable 和 Parceable 原理
 - Serializable 的原理是通过 `ObjectInputStream` 和 `ObjectOutputStream` 来实现的
 通过反射递归序列化内部对象
@@ -203,6 +221,29 @@ WindowInputEventReceiver 是在 ViewRootImpl.setView 里面初始化的，setVie
 	E/test:SerializableTestData readResolve
 	```
   > 默认会忽略 static 变量以及被声明为 transient 的字段
+
+## BroadcastReceiver#onReceive接受到事件时是在哪个线程？
+主线程。所以不要做耗时操作，会ANR，有埋ANR雷
+```Java
+  private class H extends Handler {
+    
+      public void handleMessage(Message msg) {
+              switch (msg.what) {
+                  case BIND_APPLICATION: // App#oncreate回调
+                      AppBindData data = (AppBindData)msg.obj;
+                      handleBindApplication(data);
+                      break;
+                    case RECEIVE:
+                      // ... 
+                      break;
+              }
+          
+      }
+  }
+```
+
+## ContentProvider#onCreate是在Application#onCreate之前还是之后？
+在之前。很多三方库activity-lifecycle、LeakCanary都是在自定义ContentProvider中初始化的，所以如果`onAttachApplicationBaseContext()` -> `onCreate`的中间耗时变久了，可以优先排查一下是不是引入了新的`ContentProvider`
 
 ## ContentProvider 的原理是什么？为啥工程选用ContentProvider而不是AIDL来IPC
 - 利用了 Android 的 Binder 和匿名共享内存机制。
@@ -243,8 +284,29 @@ WindowInputEventReceiver 是在 ViewRootImpl.setView 里面初始化的，setVie
 5. App进程binder线程（ `ApplicationThread` ）收到请求后，通过 `Handler` 向主线程发送 `LAUNCH_ACTIVITY` 消息
 6. 主线程收到Message后，通过反射机制创建目标Activity，并回调Activity的`onCreate`
 
+> 点击图标，startActivity远程调用到ams，ams中将新启动的activity以activityrecord的结构压入activity栈中，并通过远程binder回调到原进程，使得原进程进入pause状态，原进程pause后通知ams我pause了。
+> ams再根据栈中activity的启动intent中的flag是否含有new_task的标签判断是否需要启动新进程，启动新进程通过startProcessXXX的函数。启动新进程后通过反射调用ActivityThread的main函数，main函数中调用looper.prepar和lopper.loop启动消息队列循环机制。
+
+## 为什么onCreate里面可以在子线程更新UI？延时之后又不能了呢？
+> onResume：View已经绘制完成，并且已经处于可见状态
+onResume 时才将View添加到 WindowMannager 窗口中，即准备展示View。才会对ViewRootImpl对象进行初始化。执行onCreate()在子线程中更新UI时ViewRootImpl还没出生，当然也不会去检查线程，所以onCreate里面可以在子线程更新UI不会报错。
+
 ## 屏幕刷新的原理是什么？如何减少卡顿？
-View 的 requestLayout 和 ViewRootImpl##setView 最终都会调用 ViewRootImpl 的 requestLayout 方法，然后通过 scheduleTraversals 方法向 Choreographer 提交一个绘制任务，然后再通过 DisplayEventReceiver 向底层请求 vsync 垂直同步信号，当 vsync 信号来的时候，会通过 JNI 回调回来，在通过 Handler 往消息队列 post 一个异步任务，最终是 ViewRootImpl 去执行绘制任务，最后调用 performTraversals 方法，完成绘制。
+View 的 requestLayout 和 ViewRootImpl##setView 最终都会调用 ViewRootImpl 的 requestLayout 方法，然后通过 scheduleTraversals 方法向 Choreographer 提交一个绘制任务，然后再通过 DisplayEventReceiver 向底层请求 vsync 垂直同步信号，当 vsync 信号来的时候，会通过 JNI 回调回来，doFrame()在通过 Handler 往消息队列 post 一个异步任务 ，最终是 ViewRootImpl 去执行绘制任务，最后调用 performTraversals 方法，完成绘制。
+```Java
+  // 接受到物理vsync信号后的 doFrame() 回调，顺序安排所有任务。实现了onVsync()的DisplayEventReceiver都会收到回调
+  doCallbacks(Choreographer.CALLBACK_INPUT, frameIntervalNanos);
+
+  mFrameInfo.markAnimationsStart();
+  doCallbacks(Choreographer.CALLBACK_ANIMATION, frameIntervalNanos);
+  doCallbacks(Choreographer.CALLBACK_INSETS_ANIMATION, frameIntervalNanos);
+
+  mFrameInfo.markPerformTraversalsStart();
+  doCallbacks(Choreographer.CALLBACK_TRAVERSAL, frameIntervalNanos);  // ViewRootImpl#TraversalRunnable收到后去让View树渲染performTraversals()
+
+  doCallbacks(Choreographer.CALLBACK_COMMIT, frameIntervalNanos);
+```
+
 ![屏幕刷新的原理](https://upload-images.jianshu.io/upload_images/24142630-409cdaf1c5111e47?imageMogr2/auto-orient/strip|imageView2/2/w/1089/format/webp)
 [应用流畅度(FPS)监控](https://github.com/SusionSuc/AdvancedAndroid/blob/master/performance/rabbit/%E5%BA%94%E7%94%A8%E6%B5%81%E7%95%85%E5%BA%A6(FPS)%E7%9B%91%E6%8E%A7.md)
 [面试官又来了：你的app卡顿过吗？](https://juejin.cn/post/6844903949560971277)
@@ -311,10 +373,13 @@ Apk的资源是通过AssetManager.addAssetPath方法来完成加载，那么我�
 - 最后使用的都是`resources.arsc`，所以R文件可以精简
   1. 可以在编译完成之后将 module 里面对于 R 的引用换成「内联」的，这样就可以少了一次内存寻址，也可以删掉被内联后的 R.class，减少了包体积又做了性能优化。
   2. 可以在编译的时候通过固定 id 来减少增删改资源带来的大量 id 变动，导致 R.java 被“连根拔起”，带来下游依赖它的 java/kotlin 文件重新编译。 
-  > stable-ids 在「热修复」、「插件化」中有很大的用处
+  > stable-ids 在「热修复」、「」中有很大的用处
 
 ## 说说组件化和插件化、热更新（热补丁）、热修复技术原理
 热修复与插件化都利用classloader实现加载新功能。热修复比插件化复杂，插件化只是增加新的功能或资源文件，所以不涉及抢先加载旧类的使命。热修复为了修复bug，要将新的同名类替旧的同名bug类，要抢在加载bug类之前加载新的类。
+
+## 为什么一发组件化/热修复就会卡ANR？
+因为每次都是从原始dex文件去读。没有用oat的热点文件方法等需要首次运行编译
 
 ## Blockcanary有什么缺点
 原理是替换logger的实现，塞了一个自己的，但你能塞，别人也能塞，别人在你blockcanary初始化后面塞进来就导致blockcanary失效了，同时对于dispatch中的耗时操作无法监控到，因为这个没有走handler是native调用的
@@ -971,10 +1036,74 @@ okhttp记录了每个socket流使用情况，同时设定了每个socket能同�
 ### OkHttp的HTTP缓存
 主要是根据`Header(Date\Expires\Last-Modified\ETag\Age)`来缓存响应数据减少重复的网络请求
 
-## 
 
 ## 点击桌面图标进入我们软件应用时发生了什么？
 通过翻阅 Application 启动的源码，当我们点击桌面图标进入我们软件应用的时候，会由 AMS 通过 Socket 给 Zygote 发送一个 fork 子进程的消息，当 Zygote fork 子进程完成之后会通过反射启动 ActivityThread##main 函数，最后又由 AMS 通过 aidl 告诉 ActivityThread##H 来反射启动创建Application 实例，并且依次执行 `attachBaseContext` 、`onCreate` 生命周期，由此可见我们不能在这 2 个生命周期里做主线程耗时操作。
+
+## Android有哪些性能指标？
+### 速度优化指标：卡顿率 
+
+- [卡顿耗时](https://bugly.tds.qq.com/docs/tutorial/jank/)
+    - > 卡顿耗时是准确的，表示一条UI线程的消息执行耗时。
+    - > 火焰图等卡顿堆栈的耗时是根据抓栈次数以及抓栈间隔估算得到
+
+#### OOM率
+OOM（Out of Memory）问题通常指的是Java堆内存不足导致的java.lang.OutOfMemoryError异常。然而，OOM问题不仅限于Java堆内存，还可能涉及到文件描述符（FD）资源使用超标或本地内存地址空间使用超标。
+
+- Java OOM。最常见的OOM问题，通常由于Java堆内存不足导致。当应用程序请求的内存超过Java堆的可用空间时，会抛出java.lang.OutOfMemoryError异常。这可能是由于Java内存泄漏、大对象分配、大图等原因引起的。
+  - 需要积极去发现内存泄漏问题、优化垃圾回收策略、调整堆内存大小
+- FD OOM。指文件描述符资源使用超标导致的OOM问题。每个进程在运行时都有一定数量的文件描述符可用，用于打开、读取和写入文件等
+- Native OOM。指本地内存地址空间使用超标导致的OOM问题。在Android开发中，应用程序可以使用本地代码（如C/C++）来执行一些高性能的任务。如果本地代码中存在内存泄漏或者大量的本地内存分配，就会导致本地内存地址空间耗尽，从而引发Native内存分配相关的OOM问题，常见的像mmap失败或者显存爆了的问题。
+
+
+#### 启动耗时
+启动监控的指标是启动耗时，包含冷启动耗时和温启动耗时，详细内容见《启动监控使用指引》
+
+默认冷启动：从进程创建到首个Activity首帧绘制。
+冷启动：从应用进程创建，到启动页完成首次渲染，业务可以自定义启动结束点。
+温启动：进程已经创建的情况下，不存在active的Activity的情况下，从Activity的打开到页面完成首次渲染。
+前后台切换：应用在后台挂起状态，再切前台。
+
+### 内存优化指标：PSS / USS / Java内存占用 / Native内存占用
+物理内存：应用使用的物理内存，即 PSS 。
+虚拟内存：应用使用的虚拟内存，即 VSS 。
+
+## 内存溢出和内存泄漏有什么区别？何时会产生内存泄漏？内存优化有哪些方法？
+- 堆内存，Java 堆内存溢出。
+    - 分配的内存到达 Java 堆的上限
+    - 可用内存很多，因为内存碎片化，没有足够的连续段的空间分配
+    - 对象的单次分配或者多次分配累计过大，例如在循环动画中一直创建 Bitmap
+
+- 堆内存泄露，指的是在程序运行时，给对象分配的内存，当程序退出或者退出界面时，分配的内存没有释放或者因为其他原因无法释放。资源泄露，比如 FD、socket、线程等等，这些在每个手机上都是有数量的限制，如果使用了不释放，就会因为资源的耗尽而崩溃
+
+## 为什么要有虚拟内存？物理内存和虚拟内存
+32 位 CPU 架构的设备可使用的地址空间大小为 2^32=4GB，但实际用户态只有3GB。64位只有512GB，剩下的是内核用的。
+Java 堆的上限默认都是 512MB
+Bitmap 变化：
+- 在 Android 8.0 之前，Bitmap 像素占用的内存是在 Java heap 中分配的
+- Android 8.0 及之后，Bitmap 像素占用的内存分配到了 Native Heap
+
+## 什么LeakCanary不能用于线上
+- LeakCanary通过弱引用关联对象连续两次主动触发GC判定是否泄露，频繁GC易导致程序卡顿；
+- 每次检测到泄露都会dump快照文件，同一个泄露多次触发也会dump多份快照；
+- dump hprof文件（内存镜像）耗时，易造成程序长时间无响应；
+- hprof文件太大，解析耗时；
+
+## 如何监控OOM？
+周期性检测。开启IntentService启动hprof（内存快照）解析
+1. APP内存占用率超过内存阈值
+    1. Native 层监控： 使用 /proc/self/status 和 mmap 机制监控应用的内存占用，如 VSS、RSS、PSS 和 Native 堆。
+    2. Java 层监控： 通过 Runtime.getRuntime() 获取 Java 堆使用信息，例如已分配堆大小和最大堆大小。
+2. 线程数量超过阈值
+3. 文件描述符超过阈值
+4. 当前内存占用率
+
+异步转储，避免阻塞主线程。
+- dumpHprofData 可以将hprof文件输出在指定的文件中，但是这个过程会 “冻结” 整个应用进程，造成数秒甚至数十秒内用户无法操作
+- 子进程的内存镜像就是父进程的！fork子进程在子进程中完成内存dump
+- 但fork多线程可能会导致死锁问题。
+- > 在多线程执行的情况下调用fork()函数，仅会将发起调用的线程复制到子进程中，其他线程均在子进程中立即停止并消失。但父进程全局变量的状态以及所有的pthreads对象（如互斥量、条件变量等）都会在子进程中得以保留！因此，当子进程中进行dump hprof时，SuspendAll触发暂停是永远等不到其他线程返回结果，从而导致子进程阻塞卡死！
+[Android-性能优化-02-内存优化-快手KOOM](https://juejin.cn/post/7451861577978609664)
 
 ## OOM是什么，怎么导致的？
 
@@ -1242,3 +1371,36 @@ suspend原理：编译器帮忙实现了状态机，根据不同状态调用不�
 3. inBitmap
   > 使用inBitmap，在4.4之前，只能重用相同大小的bitmap的内存区域，而4.4之后你可以重用任何bitmap的内存区域，只要这块内存比将要分配内存的bitmap大就可以（必须有相同的解码格式，例如大家都是8888的）这里最好的方法就是使用LRUCache来缓存bitmap，后面来了新的bitmap，可以从cache中按照api版本找到最适合重用的bitmap，来重用它的内存区域。 
 4. cache）
+
+## GVM?
+
+## x
+
+## flutter页面性能优化？
+![如何减少 widget rebuild 的次数](https://flutter.oldbird.run/article/13b9c779-7c1d-80e6-92d4-dfa49a5d204b?theme=starter)
+## 如何做flutter和原生的性能对比？
+
+## RN页面打开速度优化
+这个页面为什么要改成RN呢?
+所以为什么技术上要去选择RN呢？看上去有很多技术风险。
+你们有很强的跨平台的诉求吗？
+你了解的动态化方案有哪些?
+那为什么会选择RN, 而不是UI动态化的方案？
+RN的技术原理, 执行流程, 渲染原理。
+深入一点吧。第一步, js代码和js引擎之间的解析关系, 包括和原生的通信方式是怎么做的？
+能更具体点吗?它怎么去解析jsbundle的, 怎么去映射成Native的View的。
+核心的执行流程呢？
+负责RN化的时候, 你负责的是哪块部分？
+RN相关的性能优化, 是怎么做的优化, 取得预期收益有哪些, 深入一下技术原理。
+局部刷新的原理？
+如何做RN和原生的性能对比？
+除了启动时长, 还有哪些性能指标？
+帧率怎么监控?
+你说到更好的方案当时是怎么做的？
+编舞者在Android系统上的作用？
+播放优化
+你做了什么事情？
+预加载x个不会带来资源的竞争和劣化吗？
+播放器播放文件的整个流程？
+视图预热对App的内存影响有具体关注过吗?
+如何监控内存？

@@ -7,6 +7,7 @@ tags:
 categories: 面试
 ---
 摘自 [Handler高频40问] (https://mubu.com/doc/4AOg4eG-V2v)
+部分可以见[Android 性能优化 - 面试经典问题](https://www.bilibili.com/video/BV1ZizbYEEcV/?spm_id_from=333.337.search-card.all.click&vd_source=728c2c15f151037482a49509ea153706)
 - `epoll` 有什么优势？`Handler` 和管道(`Pipe`)的关系？`Android M` 开始，将 `Pipe` 换成了 `eventFd`是为什么？`Handler` 底层为什么使用管道，而不是 `Binder` ？`Handler` 可以 `IPC` 通信吗？
 <!--more-->
 
@@ -168,6 +169,7 @@ Handler的`dispatchMessage`函数里：
 > `BlockCanary`就是用此设计
 
 # 子线程如何向主线程的 Handler 发送消息？为什么经过 Handler 就可以达到切线程的目的？
+可以子线程发送消息是因为`Handler`的成员变量 `MessageQueue#Message` 维护了一个消息队列（链表），向这个消息队列插入消息，并使用同步的手段（`synchronized (this) `）就可以进行达成线程间共享消息。
 向`Handler`的成员变量 `MessageQueue` 中添加消息 `Message`，下次`Looper#loop()`循环到的时候就可以检测到这个消息`Message`
 
 
@@ -323,9 +325,30 @@ Handler的`dispatchMessage`函数里：
     }
 ```
 # 如何理解 HandlerThread？
-- 继承 `Thread`，根据`TLS`维护子线程的 `Looper`，在子线程`Looper#loop()`
+- 继承 `Thread`，根据`TLS`(ThreadLocal)维护子线程的 `Looper`，在子线程`Looper#loop()`
 - 持有了`Handler`，开启了`Looper.prepare()`与`Looper.loop()`循环
 - 在 `IntentService` 后台任务执行时也直接持有了一个`HandlerThread`来挨个执行任务，并且`IntentService`全部执行任务完毕后会自动停止
+
+## 普通Service是运行在哪个线程上的？
+如果是Local Service，那么对应的 Service 是运行在主进程的 main 线程上的。如：onCreate，onStart 这些函数在被系统调用的时候都是在主进程的 main 线程上运行的。如果是Remote Service，那么对应的 Service 则是运行在独立进程的 main 线程上。
+
+## IntentService有何优点？
+适用场景：
+1. 需要后台执行耗时操作（如网络请求、数据库批量操作）。
+2. 任务之间需按顺序执行（如多个文件下载）。
+注意事项
+1. 构造函数要求：必须提供无参构造函数，并调用 super("threadName")。
+2. 避免阻塞主线程：onHandleIntent 中的代码需在子线程完成，否则仍会导致 ANR。
+3. 内存泄漏：若在 onHandleIntent 中持有 Activity 引用，需及时释放。
+高频问题
+1. 为什么 IntentService 能处理耗时操作？
+    - 通过 HandlerThread 创建子线程，任务在子线程执行，避免主线程阻塞。请求的执行顺序是按启动顺序串行执行，队列管理由系统自动处理。
+2. IntentService 的 onHandleIntent 和 Service 的 onStartCommand 有何区别？
+    - onStartCommand 运行在主线程，需手动处理线程；onHandleIntent 自动在子线程执行。
+3. IntentService 的好处
+    - 与普通 Service、WorkManager 对比：封装了线程和队列，简化了耗时任务开发。
+    - 与 WorkManager 对比：WorkManager 支持更复杂的调度策略（如网络条件、电池状态），但 IntentService 更轻量。
+
 
 # 如何实现子线程等待主线程处理消息结束后，再继续执行？原理是什么？
 使用 `Handler` 的 `boolean runWithScissors(final Runnable r, long timeout)`
@@ -410,3 +433,13 @@ Handler的`dispatchMessage`函数里：
 在子线程 Looper 中使用，可能导致 A 线程进入 wait 等待，而永远得不到被 notify 唤醒
 - 原因： 子线程 `Looper` 允许退出，若包装的 `BlockingRunnable` 被执行前，`MessageQueue` 退出，则该 `runnable` 永远不会被执行，则会导致 A 线程一直处于 `wait` 等待，永远不会被 `notify` 唤醒
 - 解决方法：要求该`Handler`的`Looper`使用`quitSafely() `不能使用`quit()`。`quit()`会清理掉所有未执行的任务。 `quitSafely()` 只会清理掉当前时间点之后(when > now)的消息。这样`runWithScissors()`发送的任务，依然会被执行。
+
+# 性能优化
+## Java线程的调度、线程的生命周期、notify和wait后会进入什么阶段
+
+## 线程池的配置参数
+
+## 线程对CPU资源的占用，如何能让线程跑在高和CPU上
+
+## 一个线程占多少内存？一个线程栈大小由多少，怎么避免栈溢出
+

@@ -17,8 +17,9 @@ tags:
 )
 
 ## AbstractQueuedSynchronizer（AQS原理是什么？） ⭐
-
+state变量+CLH双端Node队列
 [AbstractQueuedSynchronizer之AQS](https://www.jianshu.com/p/d64b961eed35)
+> 如果共享资源被占用，就需要一定的阻塞等待唤醒机制来保证锁分配。这个机制主要用的是CLH队列的变体实现的，将暂时获取不到锁的线程加入到队列中，这个队列就是AQS的抽象表现。它将请求共享资源的线程封装成队列的结点(Node) ，通过CAS、自旋以及LockSuport.park()的方式，维护state变量的状态，使并发达到同步的效果。
 
 ## Java集合小抄
 [Java后台面试 常见问题](https://www.jianshu.com/p/1acdfac2b4e4)
@@ -374,6 +375,12 @@ https://blog.csdn.net/qq_36520235/article/details/82417949?utm_medium=distribute
 
 - 写时复制的ConcurrentHashMap的[clear方法是弱一致性的](http://ifeve.com/concurrenthashmap-weakly-consistent/)，因为是不同桶结点在清理时临时加锁，所以已经被清理过的段可能会被添加新内容很正常。故现象为clear完后，里面有其他地方新加的数据。原理[HashMap? ConcurrentHashMap? 相信看完这篇没人能难住你！](https://crossoverjie.top/2018/07/23/java-senior/ConcurrentHashMap/)和[Java 8 ConcurrentHashMap 源码解读](https://swenfang.github.io/2018/06/03/Java%208%20ConcurrentHashMap%20%E6%BA%90%E7%A0%81%E8%A7%A3%E8%AF%BB/)
 
+## HashMap和LinkedHashMap的实现原理，LRUCache的实现原理？
+
+## 双向链表的实现的过程
+
+## Glide LRUCache实现的过程
+
 ## 40. synchronizied是可重入锁吗？和ReentrantLock区别是什么？
 > ReentrantLock的锁实现是用aqs,会占用额外空间.
 synchronizied是底层的jvm的线程竞争.
@@ -389,6 +396,62 @@ synchronizied是底层的jvm的线程竞争.
 -  要判断两个类是否“相同”，就算包路径完全一致，但是加载他们的ClassLoader不一样，那么这两个类也会被认为是两个不同的类
 ## 可以加载类的时候，对字节码进行修改吗？
 [Java探针-Java Agent技术-阿里面试题](https://www.cnblogs.com/aspirant/p/8796974.html)
+
+## 如果自定义一个String类，会怎么加载？自定义的String类会编译成功吗？
+
+## kotlin const 和 val 的区别
+
+## 泛型机制讲一下
+> Java中的泛型，只在编译阶段有效。在编译过程中，正确检验泛型结果后，会将泛型的相关信息擦出，并且在对象进入和离开方法的边界处添加类型检查和类型转换的方法。也就是说，泛型信息不会进入到运行时阶段
+1. Java的泛型通过类型擦除实现，即泛型类型参数在编译后会被替换为原始类型（如Object）。例如，List<String>在字节码中会退化为List，类型信息仅在编译时保留。
+2. 无法重载泛型方法（如method(List<Integer>)和method(List<Double>)会被擦除为相同签名）。
+3. 无法通过反射获取运行时泛型类型（需借助TypeToken或第三方库）。
+4. 泛型类无法直接在静态方法中使用其类型参数（如T），静态方法的加载时机：静态方法属于类而非实例，会在类加载时初始化。此时，泛型类的类型参数尚未确定（需实例化时指定），导致静态方法无法访问泛型参数T的具体类型。
+	- 类型擦除的影响：即使静态方法试图使用T，编译后也会被替换为Object，导致类型信息丢失，无法保证类型安全。
+```Java
+// 静态 create 泛型方法. 
+public static <T> Pair<T> create(T first, T last) {
+	// 泛型方法的类型参数（如<T>）是方法自身的参数，与泛型类的类型参数无关。编译器通过调用时的参数推断类型，确保类型安全。
+    return new Pair<T>(first, last);
+}
+```
+
+## 泛型的常见问题，例如：泛型的通配符与边界
+1. 无界通配符<?>：表示未知类型，仅支持读取（如List<?> list），不能写入（避免类型不匹配）。
+2. 协变（<? extends T>）：允许读取子类型数据，如List<? extends Number>可接受List<Integer>，但不能添加元素。
+3. 逆变（<? super T>）：允许写入父类型数据，如List<? super Integer>可接受List<Number>，但不能读取。
+4. 边界限制：通过<T extends Number>约束类型参数，确保方法内可调用T的特定方法（如intValue）。
+5. List、List、List<? extends Object>的区别
+	- List<T>：类型未知，只能读取（add需类型匹配）。
+	- List<Object>：可添加任何对象。
+	- List<? extends Object>：与List<?>等价，但明确表示上界。
+6. 为什么泛型不能有基本类型？
+7. 类型擦除后需转换为Object，而基本类型无法自动装箱到Object，会导致编译错误。
+8. Java的泛型不支持逆变和协变,只是能够实现逆变和协变。泛型与继承的关系若Dog extends Animal<String>，则Dog不能视为Animal<Dog>的实例，因泛型不支持协变。
+```Java
+	//数组支持协变。这里支持里氏替换原则：子类对象能够替换父类对象，而程序逻辑不变。
+	Number[] n = new Integer[10];
+	//编译不通过，泛型不支持协变。但可以使用通配符(Wildcard)模拟协变
+	//List<Number> ln = new ArrayList<Integer>();//报错
+	//Type mismatch: cannot convert from ArrayList<Integer> to List<Number>
+
+	// Number的子类型都可以是泛型参数类型
+	List<? extends Number> ln = new ArrayList<Integer>();
+	//Integer的父类型(包括Integer)都可以是泛型参数类型
+	List<? super Integer>  li = new ArrayList<Number>();
+	/* 
+	1.Integer是Number的子类型   √
+	2.ArrayList<Integer>是List<Integer>的子类型  √
+	3.Integer[] 是Number[] 的子类型   √
+	4.List<Integer> 是List<Number>的子类型  ×
+	5.List<Integer> 是List<? extends Integer>的子类型  ×
+	6.List<Integer> 是List<? super Integer>的子类型  ×
+	*/
+```
+
+```Json
+```
+
 ## JVM类加载过程，什么是双亲委派机制？
 > [吊打面试官-类加载器](https://zhuanlan.zhihu.com/p/138823011)
 ![类加载过程](https://img-blog.csdnimg.cn/20201103165654872.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L2xlaTM5NjYwMTA1Nw==,size_16,color_FFFFFF,t_70#pic_center)
