@@ -1404,7 +1404,6 @@ lbs 返回服务器 ip 而非域名
 [Android 面试黑洞——当我按下 Home 键再切回来，会发生什么？](https://www.bilibili.com/video/BV1CA41177Se/?spm_id_from=333.337.search-card.all.click&vd_source=728c2c15f151037482a49509ea153706)
 
 ### singleTask
-
 `singleTask`: 该Activity全局唯一。相同的`taskAffnity`属性在一个task栈里，多个相同的`taskAffnity`的栈只会展示一个`Activity`在最近打开的应用里。如果栈里存在有旧Activity，则不会调用OnCreate，而是OnNewIntent，且会清除到栈顶的所有 Activity。 
 
 `singleInstance`: 一个task里只有这一个Activity。再在`singleInstance` 里打开新Activity，会将task 栈拿过来覆盖在上面 
