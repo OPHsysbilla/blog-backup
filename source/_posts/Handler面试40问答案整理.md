@@ -354,7 +354,7 @@ Handler的`dispatchMessage`函数里：
 使用 `Handler` 的 `boolean runWithScissors(final Runnable r, long timeout)`
 实现 A 线程阻塞等待 B 线程处理完消息后再继续执行的功能。
 ## 原理
-很危险可能造成死锁，是`@hide`不允许非系统调用
+很危险可能造成死锁，是`@hide`不允许非系统调用 —— 请搜索fork多线程查看相关问题 
 - 如果timeout超时了，不阻塞调用线程了直接`return false`，但是没有取消`runnable`的逻辑消息还是会排队排到执行。
 - 调用线程进入阻塞(`wait()`)，不排队排到执行完成不会被唤醒，如果当前runnable里的代码持有别的锁，会造成死锁，本调用线程永远不执行了
 
@@ -441,5 +441,18 @@ Handler的`dispatchMessage`函数里：
 
 ## 线程对CPU资源的占用，如何能让线程跑在高和CPU上
 
-## 一个线程占多少内存？一个线程栈大小由多少，怎么避免栈溢出
 
+## 一个线程占多少内存？一个线程栈大小由多少，怎么避免栈溢出
+#### Android线程大小
+在Android系统中，主线程默认占用内存为8192KB，即8MB，其他线程默认占用内存为1MB左右，在ANR的trace文件里我们可以在每个线程的stackSize值里看到对应的值内存
+
+Java线程没有及时退出的典型例子如下。
+- 使用HandlerThread，没有及时调用quit方法。HandlerThread在启动后会执行Looper.loop，这会导致run方法始终不会结束。
+- 使用Thread.java，在run方法里有循环操作。
+- 项目里线程池过多，线程池的核心线程数都不为0。
+- C++线程创建pthread时没有设置detach状态（Linux线程的一个属性，默认值为joinable）​，导致线程执行完后无法退出。之所以会这样，是因为Linux线程在退出时，只有进入detach状态才会释放内存，所以我们需要在创建线程时主动将线程的detach状态设置为PTHREAD_CREATE_DETACHED，否则会导致线程泄漏。
+> new Thread创建一个线程时，最终会执行到Native层的pthread_create方法，也就是说，一个Java线程对应一个Native线程。
+
+常见的线程监控方式有两种：
+1. 编译时对new Thread和new HandlerThread等代码进行AOP切面hook，在其中增加统计代码或者直接把创建线程替换成统一使用线程池。
+2. 运行时在hook线程创建的底层实现pthread_create方法，在其中增加统计代码，根据创建堆栈进行优化。
